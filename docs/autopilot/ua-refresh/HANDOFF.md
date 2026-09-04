@@ -70,6 +70,7 @@
 - `node`/`pnpm` 은 nvm (`~/.nvm/versions/node/*/bin`), `go` 1.26.7, Homebrew `/opt/homebrew/bin`
 - macOS 에 `timeout`/`gtimeout` 없음. `launchctl bootstrap gui/$(id -u) <plist>` / `bootout` 사용
 - 이미 `~/Library/LaunchAgents` 에 다른 LaunchAgent 들이 있음 (충돌 없음)
+- launchd 인증 실험(2026-09-04): Keychain 인증으로 됨 (claude -p 가 launchd 에서 JSON 반환, total_cost_usd=0.83). oauth_token 불필요
 
 코드 조각:
 

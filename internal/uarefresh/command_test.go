@@ -87,7 +87,7 @@ func TestRunCommandEndToEnd(t *testing.T) {
 	if err != nil || len(last.Repos) != 1 || last.Repos[0].Status != StatusUpdated {
 		t.Fatalf("last-run: %+v %v", last, err)
 	}
-	if slack.count() != 1 || !strings.Contains(slack.last(), "1 updated") || !strings.Contains(slack.last(), "example-api") {
+	if slack.count() != 2 || !strings.Contains(slack.last(), "1 updated") || !strings.Contains(slack.last(), "example-api") {
 		t.Errorf("slack: %d msgs, last=%q", slack.count(), slack.last())
 	}
 	logBytes, err := os.ReadFile(last.LogPath)
@@ -102,6 +102,31 @@ func TestRunCommandEndToEnd(t *testing.T) {
 	}
 }
 
+// TestRunCommandSendsStartNotification 은 run 이 시작할 때도 Slack 에 짧은 알림을 보내는지 본다 — 끝날 때
+// 보내는 결과 요약 DM 과는 별개로, 시작했다는 사실만 먼저 알린다.
+func TestRunCommandSendsStartNotification(t *testing.T) {
+	work, _ := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	head, _ := Head(t.Context(), work)
+	writeMeta(t, work, ".ua", head)
+	slack := newSlackStub(t, 200)
+	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatalf("RunCommand: %v", err)
+	}
+	if slack.count() != 2 {
+		t.Fatalf("want 2 slack messages (start + end), got %d: %v", slack.count(), slack.texts)
+	}
+	first := slack.texts[0]
+	if !strings.Contains(first, "starting") || !strings.Contains(first, "1 repo") {
+		t.Errorf("first message should be the start notification, got %q", first)
+	}
+	if !strings.Contains(slack.last(), "up to date") {
+		t.Errorf("last message should still be the end summary, got %q", slack.last())
+	}
+}
+
 func TestRunCommandReturnsIncompleteButStillNotifies(t *testing.T) {
 	work, _ := newRepoWithOrigin(t, "main")
 	f := installFakeClaude(t, "ok")
@@ -113,7 +138,7 @@ func TestRunCommandReturnsIncompleteButStillNotifies(t *testing.T) {
 	if !errors.Is(err, ErrIncomplete) {
 		t.Fatalf("want ErrIncomplete, got %v", err)
 	}
-	if slack.count() != 1 || !strings.Contains(slack.last(), "1 skipped") {
+	if slack.count() != 2 || !strings.Contains(slack.last(), "1 skipped") {
 		t.Errorf("slack: %d msgs, last=%q", slack.count(), slack.last())
 	}
 }
@@ -266,8 +291,8 @@ func TestRunCommandCancelKillsClaudeAndStillNotifies(t *testing.T) {
 		t.Errorf("grandchild sleep (pid %d) survived cancellation", pid)
 	}
 
-	if slack.count() != 1 {
-		t.Errorf("slack: want 1 message despite cancellation, got %d", slack.count())
+	if slack.count() != 2 {
+		t.Errorf("slack: want 2 messages (start + end) despite cancellation, got %d", slack.count())
 	}
 }
 

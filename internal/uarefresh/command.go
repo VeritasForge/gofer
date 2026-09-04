@@ -62,6 +62,11 @@ func RunCommand(ctx context.Context, o CommandOptions) error {
 	logw := &syncWriter{w: logFile}
 	fmt.Fprintf(logw, "=== ua-refresh run %s · %d repos ===\n", started.Format(time.RFC3339), len(repos))
 
+	// 시작 알림: 결과 요약 DM 과 별개로, 시작했다는 사실만 짧게 먼저 보낸다. 실패해도 실행은 계속한다.
+	if err := slack.Post(context.Background(), cfg.Notify.Slack.WebhookURL, StartText(started, len(repos))); err != nil {
+		fmt.Fprintf(logw, "slack (start): %v\n", err)
+	}
+
 	items := make([]tui.Item, len(repos))
 	for i, r := range repos {
 		items[i] = tui.Item{Name: r.Name(), Sub: r.Trunk}

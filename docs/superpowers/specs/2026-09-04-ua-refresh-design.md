@@ -206,7 +206,15 @@ Charm v2 계열 셋은 GitHub 저장소는 `charmbracelet/` 아래에 있지만 
 
 레포마다 한 줄, 처리 중인 줄에만 스피너와 경과 시간. 끝나면 요약 표. TTY가 아니면(launchd) 같은 내용을 한 줄씩 로그로 쓴다.
 
-### Slack DM (실행 종료 시 1건, 항상)
+### Slack DM (시작 1건 + 종료 1건, 항상)
+
+시작하자마자 짧은 알림을 먼저 보낸다 — 실행 중인지 조용히 실패했는지 기다리지 않고 알 수 있게:
+
+```
+ua-refresh 2026-09-05 07:30 · starting · 6 repos
+```
+
+끝나면 결과 요약 DM 을 보낸다:
 
 ```
 ua-refresh 2026-09-05 08:41 · 2 updated · 1 up to date · 0 skipped · 1 failed · $2.54
@@ -217,7 +225,7 @@ ua-refresh 2026-09-05 08:41 · 2 updated · 1 up to date · 0 skipped · 1 faile
 로그: ~/Library/Logs/gofer/ua-refresh/2026-09-05.log
 ```
 
-DM 전송이 실패하면 macOS 알림(`osascript`) 한 줄로 대체한다. 로그는 항상 남는다.
+시작 알림은 실패해도 실행을 막지 않고 로그에만 남긴다(대체 알림 없음) — 정말 중요한 건 종료 DM 이기 때문이다. 종료 DM 전송이 실패하면 macOS 알림(`osascript`) 한 줄로 대체한다. 로그는 항상 남는다.
 
 ### 로그
 

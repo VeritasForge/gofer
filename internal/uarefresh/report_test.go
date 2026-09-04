@@ -5,7 +5,25 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestStartText(t *testing.T) {
+	started := time.Date(2026, 9, 5, 7, 30, 4, 0, time.Local)
+	got := StartText(started, 6)
+	want := "ua-refresh 2026-09-05 07:30 · starting · 6 repos"
+	if got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+}
+
+func TestStartTextSingleRepo(t *testing.T) {
+	got := StartText(time.Date(2026, 9, 5, 7, 30, 0, 0, time.Local), 1)
+	want := "ua-refresh 2026-09-05 07:30 · starting · 1 repo"
+	if got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+}
 
 func TestSlackText(t *testing.T) {
 	home, _ := os.UserHomeDir()

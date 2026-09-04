@@ -4,9 +4,20 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"gofer/internal/tui"
 )
+
+// StartText 는 실행이 막 시작됐을 때 보내는 알림 DM 본문이다 (설계 6절). 결과 요약 DM 과 별개로,
+// 시작했다는 사실만 짧게 알린다.
+func StartText(startedAt time.Time, repoCount int) string {
+	unit := "repos"
+	if repoCount == 1 {
+		unit = "repo"
+	}
+	return fmt.Sprintf("ua-refresh %s · starting · %d %s", startedAt.Format("2006-01-02 15:04"), repoCount, unit)
+}
 
 // SlackText 는 실행 종료 시 보내는 DM 본문이다 (설계 6절). 항상 1건, 헤더 · 레포별 한 줄 · 로그 경로.
 func SlackText(r RunResult) string {

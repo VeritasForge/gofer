@@ -2,6 +2,7 @@ package uarefresh
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,9 +10,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // slackStub 은 받은 DM 본문을 모으는 가짜 웹훅이다.
@@ -121,7 +125,8 @@ func TestRunCommandFallsBackToOsascriptWhenSlackFails(t *testing.T) {
 	writeMeta(t, work, ".ua", head)
 	argsFile := installFakeOsascript(t)
 	slack := newSlackStub(t, 500)
-	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+	webhook := slack.srv.URL + "/services/T/B/SECRETTOKEN"
+	o, _ := setupCommand(t, f, webhook, RepoConfig{Path: work, Trunk: "main"})
 
 	if err := RunCommand(t.Context(), o); err != nil {
 		t.Fatalf("RunCommand: %v", err)
@@ -134,6 +139,9 @@ func TestRunCommandFallsBackToOsascriptWhenSlackFails(t *testing.T) {
 	logBytes, _ := os.ReadFile(last.LogPath)
 	if !strings.Contains(string(logBytes), "slack:") {
 		t.Errorf("log should record the slack failure:\n%s", logBytes)
+	}
+	if strings.Contains(string(logBytes), "SECRETTOKEN") {
+		t.Errorf("daily log must not contain the webhook URL:\n%s", logBytes)
 	}
 }
 
@@ -206,6 +214,60 @@ func TestDryRunShowsGuardAndFullDecisions(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `skip: branch is "feature-x", expected "main"`) || !strings.Contains(out.String(), "then /understand --full (graph commit 0123456 not in repo)") {
 		t.Errorf("stdout:\n%s", out.String())
+	}
+}
+
+// TestRunCommandCancelKillsClaudeAndStillNotifies 는 "fang 시그널 → ctx 취소 → 프로세스 그룹 종료 → DM" 이음매를
+// 끝까지 붙여서 본다(최종 리뷰 M10-b). TTY 없는 실행(launchd 와 같은 조건)이므로 tui.Run 은 ctx 를 직접 보지
+// 않고 events 가 닫힐 때까지 기다린다 — 취소는 오케스트레이터 쪽 ctx 전파만으로 끝까지 이어져야 한다.
+func TestRunCommandCancelKillsClaudeAndStillNotifies(t *testing.T) {
+	work, _ := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "hang")
+	slack := newSlackStub(t, 200)
+	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	errCh := make(chan error, 1)
+	go func() { errCh <- RunCommand(ctx, o) }()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(f.Child); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	b, err := os.ReadFile(f.Child)
+	if err != nil {
+		t.Fatalf("fake claude never started: %v", err)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, ErrIncomplete) && err == nil {
+			t.Errorf("want a non-nil error (ErrIncomplete expected for a non-TTY run), got %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("RunCommand did not return within 15s of cancel")
+	}
+
+	killDeadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(killDeadline) {
+		if syscall.Kill(pid, 0) == syscall.ESRCH {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if syscall.Kill(pid, 0) != syscall.ESRCH {
+		syscall.Kill(pid, syscall.SIGKILL) // 정리
+		t.Errorf("grandchild sleep (pid %d) survived cancellation", pid)
+	}
+
+	if slack.count() != 1 {
+		t.Errorf("slack: want 1 message despite cancellation, got %d", slack.count())
 	}
 }
 

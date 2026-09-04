@@ -29,6 +29,27 @@ func TestAcquireLockBlocksSecondRunner(t *testing.T) {
 	}
 }
 
+func TestLockHeld(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run.lock")
+	if _, held := LockHeld(path); held {
+		t.Error("missing lock file should not be held")
+	}
+
+	os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644)
+	if pid, held := LockHeld(path); !held || pid != os.Getpid() {
+		t.Errorf("own pid: got (%d, %v), want (%d, true)", pid, held, os.Getpid())
+	}
+
+	cmd := exec.Command("true") // 이미 끝난 프로세스의 pid 를 얻는다
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(path, []byte(strconv.Itoa(cmd.Process.Pid)+"\n"), 0o644)
+	if _, held := LockHeld(path); held {
+		t.Error("dead pid should not be held")
+	}
+}
+
 func TestAcquireLockRemovesStaleLock(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run.lock")
 	cmd := exec.Command("true") // 이미 끝난 프로세스의 pid 를 얻는다

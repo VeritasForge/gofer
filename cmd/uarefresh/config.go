@@ -22,7 +22,7 @@ func configCmd() *cobra.Command {
 			}
 			if err := ua.WriteTemplate(paths.Config); err != nil {
 				if errors.Is(err, os.ErrExist) {
-					return fmt.Errorf("%s already exists; edit it directly", paths.Config)
+					return fmt.Errorf("config file already exists: %s (edit it directly)", paths.Config)
 				}
 				return err
 			}

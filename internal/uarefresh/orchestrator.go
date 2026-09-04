@@ -2,6 +2,7 @@ package uarefresh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,6 +19,10 @@ type RunParams struct {
 	Log       io.Writer
 	Events    chan<- tui.Event
 	Now       func() time.Time
+
+	// repoTimeout 은 레포 하나(①~⑥ 전체)에 주는 시간 상한이다. 0 이면 Claude.Timeout() 을 쓴다.
+	// 테스트가 짧은 값으로 덮어쓸 수 있도록 비공개 필드로 둔다.
+	repoTimeout time.Duration
 }
 
 // Run 은 설정된 레포를 순서대로 처리한다 (설계 4절 전체 흐름). 한 레포의 실패가 다음 레포를 막지 않는다.
@@ -32,6 +37,9 @@ func Run(ctx context.Context, p RunParams) RunResult {
 		logOut = io.Discard
 	}
 	logger := log.New(logOut, "", log.LstdFlags)
+	if p.repoTimeout == 0 {
+		p.repoTimeout = p.Claude.Timeout()
+	}
 
 	res := RunResult{StartedAt: now()}
 	for i, repo := range p.Repos {
@@ -69,7 +77,12 @@ func GuardReason(ctx context.Context, repo RepoConfig) (string, error) {
 }
 
 // processRepo 는 레포 하나를 ①가드 → ②fetch → ③ff-merge → ④해시 비교 → ⑤claude → ⑥검증 순으로 처리한다.
+// timeout_min 은 이 전체(①~⑥)에 걸리는 상한이다 — fetch/merge 는 원래 시간 제한이 없어, git 이 멎으면
+// 잠금을 쥔 채 다음 날 아침까지 조용히 막혀버렸다(설계 3절, 최종 리뷰 I1).
 func processRepo(ctx context.Context, p RunParams, logger *log.Logger, i int, repo RepoConfig, now func() time.Time) (rr RepoResult) {
+	ctx, cancel := context.WithTimeout(ctx, p.repoTimeout)
+	defer cancel()
+
 	start := now()
 	rr = RepoResult{Name: repo.Name(), Trunk: repo.Trunk}
 	defer func() { rr.Elapsed = now().Sub(start) }()
@@ -78,9 +91,17 @@ func processRepo(ctx context.Context, p RunParams, logger *log.Logger, i int, re
 		p.Events <- tui.Event{Kind: tui.KindStage, Index: i, Label: label, Detail: detail}
 	}
 	fail := func(reason string) RepoResult {
+		if r, ok := ctxReason(ctx, p.repoTimeout); ok {
+			reason = r
+		}
 		rr.Status, rr.Reason = StatusFailed, reason
 		logger.Printf("[%s] failed: %s", rr.Name, reason)
 		return rr
+	}
+
+	// ctrl+c 로 이전 레포에서 이미 취소됐으면, git/claude 를 불러 원문 오류를 만들지 않고 바로 실패 처리한다.
+	if r, ok := ctxReason(ctx, p.repoTimeout); ok {
+		return fail(r)
 	}
 
 	// ① 가드: 루트 작업 트리는 항상 trunk 여야 한다. 아니면 checkout 하지 않고 건너뛴다 (설계 2·4절).
@@ -172,6 +193,19 @@ func doneEvent(i int, rr RepoResult) tui.Event {
 		ev.Elapsed, ev.CostUSD = rr.Elapsed, rr.CostUSD
 	}
 	return ev
+}
+
+// ctxReason 은 ctx 가 취소됐거나(ctrl+c) 시간 상한을 넘겼으면 사람이 읽을 사유를 돌려준다.
+// git/claude 가 돌려주는 원문 오류("context canceled" 등)보다 이 문구를 우선한다.
+func ctxReason(ctx context.Context, timeout time.Duration) (string, bool) {
+	switch {
+	case errors.Is(ctx.Err(), context.Canceled):
+		return "cancelled", true
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return fmt.Sprintf("timed out after %s", timeout), true
+	default:
+		return "", false
+	}
 }
 
 func localCommitsText(n int) string {

@@ -1,10 +1,13 @@
 package uarefresh
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"gofer/internal/tui"
 )
@@ -130,6 +133,9 @@ func TestRunSkipsWhenTrackedChanges(t *testing.T) {
 	if rr.Status != StatusSkipped || rr.Reason != "uncommitted changes in tracked files" {
 		t.Fatalf("result = %+v", rr)
 	}
+	if f.called() {
+		t.Fatal("claude must not run when guard fails")
+	}
 }
 
 func TestRunFailsWhenDiverged(t *testing.T) {
@@ -183,6 +189,48 @@ func TestRunContinuesAfterFailure(t *testing.T) {
 	}
 	if got := trace(evs); got != "start stage:fetch stage:merge done:✗ start stage:fetch stage:merge done:– alldone" {
 		t.Errorf("trace = %q", got)
+	}
+}
+
+// TestRunFailsWhenRepoStepTimesOut 는 timeout_min 이 claude 뿐 아니라 fetch 도 묶는지 본다 (설계 3절, 최종 리뷰 I1).
+// 가짜 git 은 fetch 호출만 30s sleep 으로 바꿔치기하고, 나머지는 실제 git 을 그대로 실행한다.
+func TestRunFailsWhenRepoStepTimesOut(t *testing.T) {
+	work, _ := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	script := fmt.Sprintf("#!/bin/sh\ncase \" $* \" in\n  *' fetch '*) exec sleep 30 ;;\nesac\nexec %s \"$@\"\n", realGit)
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	events := make(chan tui.Event, 64)
+	start := time.Now()
+	res := Run(t.Context(), RunParams{
+		Repos:       []RepoConfig{{Path: work, Trunk: "main"}},
+		Claude:      ClaudeConfig{BudgetUSD: 5, TimeoutMin: 1},
+		ExtraPath:   []string{f.Dir},
+		Events:      events,
+		repoTimeout: 2 * time.Second,
+	})
+	for range events {
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("took %s; timeout did not bound the fetch step", elapsed)
+	}
+	if len(res.Repos) != 1 || res.Repos[0].Status != StatusFailed {
+		t.Fatalf("result = %+v", res.Repos)
+	}
+	if !strings.HasPrefix(res.Repos[0].Reason, "timed out after 2s") {
+		t.Errorf("reason = %q", res.Repos[0].Reason)
+	}
+	if f.called() {
+		t.Error("claude must not run once the repo step already timed out")
 	}
 }
 

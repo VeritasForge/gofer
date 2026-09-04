@@ -48,7 +48,7 @@ type EnvConfig struct {
 }
 
 type RepoConfig struct {
-	Path  string `toml:"path"` // Load 후에는 ~ 가 풀린 경로
+	Path  string `toml:"path"` // Load 후에는 ~ 가 풀린 경로 (그 외 형태는 그대로)
 	Trunk string `toml:"trunk"`
 }
 
@@ -61,7 +61,7 @@ at = "07:30"                 # install 이 plist 에 반영
 
 [claude]
 budget_usd  = 20             # 레포당 지출 상한 (폭주 방지용)
-timeout_min = 60             # 레포당 시간 상한
+timeout_min = 60             # 레포당 시간 상한 (fetch·merge·/understand 전체)
 model       = ""             # 비우면 Claude Code 기본 설정
 oauth_token = ""             # launchd 에서 Keychain 인증이 안 될 때만
 
@@ -119,6 +119,8 @@ func Validate(c *Config) []error {
 	}
 	if u := c.Notify.Slack.WebhookURL; !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
 		errs = append(errs, errors.New("notify.slack.webhook_url is required (http(s) URL)"))
+	} else if strings.Contains(u, "...") {
+		errs = append(errs, errors.New("notify.slack.webhook_url still has the template placeholder"))
 	}
 	if len(c.Repos) == 0 {
 		errs = append(errs, errors.New("at least one [[repos]] entry is required"))

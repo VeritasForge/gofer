@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"gofer/internal/tui"
 )
@@ -41,11 +40,7 @@ func statusSymbol(s Status) string {
 func repoLine(rr RepoResult) string {
 	switch rr.Status {
 	case StatusUpdated:
-		d := rr.Elapsed.Round(time.Second)
-		mins := int(d.Minutes())
-		secs := int(d.Seconds()) % 60
-		elapsed := fmt.Sprintf("%dm%02ds", mins, secs)
-		return strings.TrimRight(fmt.Sprintf("%-12s  %s  $%.2f", commitsText(rr.Commits), elapsed, rr.CostUSD), " ")
+		return fmt.Sprintf("%-12s  %s  $%.2f", commitsText(rr.Commits), tui.FormatElapsed(rr.Elapsed), rr.CostUSD)
 	case StatusUpToDate:
 		return "up to date"
 	case StatusSkipped:

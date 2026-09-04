@@ -36,3 +36,22 @@ func TestPostReportsNon2xx(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// TestPostDoesNotLeakURLOnTransportError 는 전송 계층 실패(연결 거부 등) 시 오류 문구에 webhook URL 이
+// 담기지 않는지 본다 — net/http 는 이 실패를 *url.Error 로 감싸는데, 그 Error() 는 URL 전체를 그대로 담는다.
+func TestPostDoesNotLeakURLOnTransportError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	srv.Close() // 닫힌 서버 = 연결 거부(connection refused)
+
+	url := srv.URL + "/services/T/B/SECRET"
+	err := Post(t.Context(), url, "x")
+	if err == nil {
+		t.Fatal("want error")
+	}
+	if strings.Contains(err.Error(), "SECRET") {
+		t.Errorf("error leaks webhook path: %v", err)
+	}
+	if strings.Contains(err.Error(), srv.URL) {
+		t.Errorf("error leaks webhook host: %v", err)
+	}
+}

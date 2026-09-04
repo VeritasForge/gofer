@@ -132,9 +132,12 @@ func RunClaude(ctx context.Context, o ClaudeOptions) (ClaudeResult, error) {
 		res.TimedOut = true
 		return res, fmt.Errorf("claude timed out after %s", o.Timeout)
 	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return res, fmt.Errorf("claude cancelled")
+	}
 	if runErr != nil {
 		if len(bytes.TrimSpace(out)) == 0 {
-			return res, fmt.Errorf("claude output is not JSON: (empty) %w", runErr)
+			return res, fmt.Errorf("claude produced no output: %w", runErr)
 		}
 		if res.IsError {
 			return res, fmt.Errorf("claude reported is_error: %.200s", res.Result)

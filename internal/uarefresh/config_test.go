@@ -86,6 +86,15 @@ func TestLoadRejectsUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsPlaceholderWebhook(t *testing.T) {
+	body := strings.Replace(validConfig, `webhook_url = "https://hooks.slack.com/services/T/B/X"`, `webhook_url = "https://hooks.slack.com/services/..."`, 1)
+	path := writeConfig(t, body)
+	_, err := Load(path)
+	if err == nil || !strings.Contains(err.Error(), "placeholder") {
+		t.Fatalf("want placeholder error, got %v", err)
+	}
+}
+
 func TestLoadRequiresAtLeastOneRepo(t *testing.T) {
 	path := writeConfig(t, strings.Split(validConfig, "[[repos]]")[0])
 	_, err := Load(path)

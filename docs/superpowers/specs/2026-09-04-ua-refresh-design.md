@@ -75,7 +75,7 @@ at = "07:30"                 # install 이 plist 에 반영
 
 [claude]
 budget_usd  = 20             # 레포당 지출 상한 (폭주 방지용)
-timeout_min = 60             # 레포당 시간 상한
+timeout_min = 60             # 레포당 시간 상한 (fetch·merge·/understand 전체)
 model       = ""             # 비우면 Claude Code 기본 설정
 oauth_token = ""             # launchd 에서 Keychain 인증이 안 될 때만
 

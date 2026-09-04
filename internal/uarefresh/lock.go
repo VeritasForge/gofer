@@ -46,3 +46,14 @@ func processAlive(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
+
+// LockHeld 는 잠금 파일이 지금 살아 있는 프로세스를 가리키는지 본다. 파일이 없거나 그 pid 가 죽어
+// 있으면 held=false 다 — install 이 진행 중인 run 을 밟고 지나가지 않도록 미리 확인하는 데 쓴다.
+func LockHeld(path string) (pid int, held bool) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
+	}
+	pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+	return pid, pid > 0 && processAlive(pid)
+}

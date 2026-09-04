@@ -76,9 +76,10 @@ func RunCommand(ctx context.Context, o CommandOptions) error {
 			Log: logw, Events: events, Now: now,
 		})
 	}()
+	// tui.Run 은 어느 경로로 끝나든 events 를 다 비운 뒤에만 돌아오므로, 그 뒤에 Log 를 닫아도 안전하다.
 	uiErr := tui.Run(ctx, tui.Options{
 		Title: fmt.Sprintf("ua-refresh · %d repos", len(repos)), Items: items, Labels: Labels,
-		Out: o.Stdout, Log: logw, TTY: o.TTY, Now: now,
+		Out: o.Stdout, Log: logw, TTY: o.TTY, Now: now, Cancel: cancel,
 	}, events)
 	if uiErr != nil {
 		cancel() // ctrl+c: 진행 중인 claude 를 프로세스 그룹째 끝내고 결과를 기다린다

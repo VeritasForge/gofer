@@ -32,7 +32,9 @@ func DefaultPaths() (Paths, error) {
 	}, nil
 }
 
-func (p Paths) DailyLog(t time.Time) string { return filepath.Join(p.LogDir, t.Format("2006-01-02")+".log") }
-func (p Paths) LaunchdLog() string          { return filepath.Join(p.LogDir, "launchd.log") }
-func (p Paths) Lock() string                { return filepath.Join(p.StateDir, "run.lock") }
-func (p Paths) LastRun() string             { return filepath.Join(p.StateDir, "last-run.json") }
+func (p Paths) DailyLog(t time.Time) string {
+	return filepath.Join(p.LogDir, t.Format("2006-01-02")+".log")
+}
+func (p Paths) LaunchdLog() string { return filepath.Join(p.LogDir, "launchd.log") }
+func (p Paths) Lock() string       { return filepath.Join(p.StateDir, "run.lock") }
+func (p Paths) LastRun() string    { return filepath.Join(p.StateDir, "last-run.json") }

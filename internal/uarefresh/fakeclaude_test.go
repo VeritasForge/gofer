@@ -17,11 +17,12 @@ type fakeClaude struct {
 }
 
 // installFakeClaude 는 가짜 claude 스크립트를 만든다.
-//   ok      그래프 meta.json 의 해시를 HEAD 로 갱신하고 성공 JSON 출력 (실제 /understand 성공과 같은 효과)
-//   noop    성공 JSON 만 출력, 그래프는 건드리지 않음 (해시 검증 실패 경로)
-//   error   is_error:true JSON 출력 후 exit 1
-//   hang    sleep 300 을 백그라운드로 띄우고 기다림 (타임아웃·그룹 종료 검증)
-//   garbage JSON 이 아닌 출력
+//
+//	ok      그래프 meta.json 의 해시를 HEAD 로 갱신하고 성공 JSON 출력 (실제 /understand 성공과 같은 효과)
+//	noop    성공 JSON 만 출력, 그래프는 건드리지 않음 (해시 검증 실패 경로)
+//	error   is_error:true JSON 출력 후 exit 1
+//	hang    sleep 300 을 백그라운드로 띄우고 기다림 (타임아웃·그룹 종료 검증)
+//	garbage JSON 이 아닌 출력
 func installFakeClaude(t *testing.T, mode string) fakeClaude {
 	t.Helper()
 	dir := t.TempDir()

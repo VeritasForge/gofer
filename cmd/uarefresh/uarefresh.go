@@ -12,5 +12,6 @@ func Cmd() *cobra.Command {
 	}
 	cmd.AddCommand(configCmd())
 	cmd.AddCommand(runCmd())
+	cmd.AddCommand(installCmd(), uninstallCmd())
 	return cmd
 }

@@ -4977,7 +4977,7 @@ git commit -m "feat(ua-refresh): status and log commands"
 
 **완료조건**: 아래 Step 순서대로 전부 통과하고, 다음 날 아침 DM 이 도착했다. 플랜 전체 완료조건 표 A~E 충족.
 
-- [ ] **Step 1: 바이너리를 안정된 경로에 두고 설정을 마무리한다**
+- [x] **Step 1: 바이너리를 안정된 경로에 두고 설정을 마무리한다** (2026-09-04: ~/.local/bin/gofer 로 복사, webhook_url 사용자가 채움)
 
 launchd plist 는 `install` 시점의 실행 파일 경로를 박아 두므로 레포 안의 `bin/gofer` 가 아니라 고정 위치에서 등록한다.
 
@@ -4987,7 +4987,7 @@ just build && cp bin/gofer ~/.local/bin/gofer && gofer --version
 
 사용자가 Slack Incoming Webhook(대상: 본인 DM)을 발급해 `~/.config/gofer/ua-refresh.toml` 의 `webhook_url` 을 채운다. 이 값은 절대 레포·플랜·인계 문서에 적지 않는다.
 
-- [ ] **Step 2: `config init` 이 기존 파일을 보존하는지**
+- [x] **Step 2: `config init` 이 기존 파일을 보존하는지** (2026-09-04: "already exists" 오류, shasum OK)
 
 ```bash
 shasum ~/.config/gofer/ua-refresh.toml > /tmp/before.sha
@@ -4997,7 +4997,7 @@ shasum -c /tmp/before.sha
 
 Expected: `already exists` 오류, `exit=1`, `shasum -c` 가 `OK`.
 
-- [ ] **Step 3: dry-run**
+- [x] **Step 3: dry-run** (2026-09-04: config OK · 6 repos, `error:` 없음; 1개 레포가 `skip:` — 루트 브랜치와 설정 trunk 불일치, 사용자 확인 필요)
 
 ```bash
 gofer ua-refresh run --dry-run
@@ -5005,7 +5005,7 @@ gofer ua-refresh run --dry-run
 
 Expected: `config OK · N repos`, `claude: /Users/.../.local/bin/claude`, 레포마다 한 줄. `error:` 줄이 없어야 한다. `skip:` 이 있으면 그 레포의 실제 상태(브랜치·미커밋)를 확인하고 정리한 뒤 다시 돌린다 — 도구가 아니라 레포 상태가 원인이다.
 
-- [ ] **Step 4: 작은 레포 하나로 실제 실행**
+- [x] **Step 4: 작은 레포 하나로 실제 실행** (2026-09-04: 1차 — 스킬이 confirm 을 기다려 실패 → `--append-system-prompt` 수정; 2차 — 사용량 창 한도; 3차 — 중단 후 model=opus 로 전환; 4차 — ✓ graph updated 11m33s $5.61, HEAD==graph)
 
 ```bash
 gofer ua-refresh run --only <가장 작은 레포 디렉토리명>; echo "exit=$?"
@@ -5014,7 +5014,7 @@ gofer ua-refresh status
 
 Expected: 화면에 스피너 → `graph updated` 또는 `up to date`; Slack DM 1건 도착; `status` 의 그 레포가 `fresh`; `exit=0`. `up to date` 였다면 그래프가 이미 최신인 것이니 다른 레포로 한 번 더 해 실제 `/understand` 경로를 확인한다.
 
-- [ ] **Step 5: 전체 실행**
+- [x] **Step 5: 전체 실행** (2026-09-04: 6개 레포 전부 fresh, 종료 코드 0 — 중간에 예산 초과·사용량 창 문제 발생 → model=sonnet, budget_usd=30 으로 조정 후 성공)
 
 ```bash
 gofer ua-refresh run; echo "exit=$?"
@@ -5023,7 +5023,7 @@ gofer ua-refresh log | tail -30
 
 Expected: 모든 레포가 updated/up-to-date, DM 1건, `exit=0`. skipped/failed 가 있으면 DM 과 로그의 사유를 보고 레포 상태를 정리하거나(가드) 버그면 `/demiurge:debug` 로 고친 뒤 재실행.
 
-- [ ] **Step 6: launchd 등록**
+- [x] **Step 6: launchd 등록** (2026-09-04: installed gofer.ua-refresh: daily at 07:30, program=~/.local/bin/gofer, launchctl print 확인됨)
 
 ```bash
 gofer ua-refresh install
@@ -5033,7 +5033,7 @@ gofer ua-refresh status | head -1
 
 Expected: `installed gofer.ua-refresh: daily at 07:30`, `launchctl print` 에 `program = /Users/.../.local/bin/gofer`, `status` 첫 줄 `launchd: installed`.
 
-- [ ] **Step 7: 플랜 완료조건 C·D 검증**
+- [x] **Step 7: 플랜 완료조건 C·D 검증** (2026-09-04: C — go list -m 정확히 6개; D — 레포 7종+trunk 명으로 검색, 결과 없음)
 
 ```bash
 go list -m -f '{{if not .Indirect}}{{.Path}}{{end}}' all | grep -v '^gofer$' | sort   # 정확히 6줄
@@ -5041,7 +5041,7 @@ go list -m -f '{{if not .Indirect}}{{.Path}}{{end}}' all | grep -v '^gofer$' | s
 git grep -n -i -E '<검색어1>|<검색어2>' -- . ':!docs/superpowers/plans'                 # 결과 없음
 ```
 
-- [ ] **Step 8: 인계 문서 갱신 · 커밋**
+- [x] **Step 8: 인계 문서 갱신 · 커밋** (2026-09-04: HANDOFF.md 최종 상태로 갱신, 이 커밋)
 
 `docs/autopilot/ua-refresh/HANDOFF.md`:
 - 2절 TL;DR: "코드 없음" → 구현 완료·launchd 등록됨·운영 관찰 대기 로 갱신.

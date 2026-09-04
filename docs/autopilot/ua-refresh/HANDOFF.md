@@ -2,14 +2,14 @@
 
 ## 1. ⚡ 즉시 재진입
 
-`/superpowers:writing-plans` 를 호출해 `docs/superpowers/specs/2026-09-04-ua-refresh-design.md` 를 바탕으로 구현 플랜을 `docs/superpowers/plans/` 에 쓴다.
+구현 플랜 `docs/superpowers/plans/2026-09-04-ua-refresh-implementation.md` 를 `/superpowers:subagent-driven-development`(권장) 또는 `/superpowers:executing-plans` 로 Task 1 부터 실행한다. 플랜 파일의 체크박스로 진행을 추적한다.
 
 ## 2. 📍 TL;DR — 어디서 멈췄나
 
 - 브랜치: `main` (origin 없음, 새 레포)
-- 마지막 커밋: `42f821f` — 설계 문서 + CLAUDE.md
+- 마지막 커밋: `fc52331` — 인계 문서. 그 뒤 구현 플랜(15 Task)과 설계 5절 의존성 표 수정이 작업 트리에 있음
 - 코드: 아직 없음 (go.mod 도 없음). 테스트 베이스라인: 해당 없음
-- 다음 단계: 구현 플랜 작성 → 플랜 실행. 브레인스토밍은 끝났고 설계는 사용자 승인됨
+- 다음 단계: 플랜 실행 (Task 1 = launchd 인증 실험, Task 2 부터 코드). 브레인스토밍은 끝났고 설계는 사용자 승인됨
 - 이 레포는 `~/workspace/tools`(빈 레포)에서 옮겨온 것. 원래 디렉토리는 손대지 않았음
 
 ## 3. ✅ 완료
@@ -18,15 +18,15 @@
 |---|---|---|
 | 브레인스토밍 · 설계 승인 | — | 대화로 진행, 결과는 설계 문서 9절 "결정 기록"에 정리 |
 | 설계 문서 · 프로젝트 규칙 | `42f821f` | `docs/superpowers/specs/2026-09-04-ua-refresh-design.md`, `CLAUDE.md` |
+| 구현 플랜 작성 | (미커밋) | `docs/superpowers/plans/2026-09-04-ua-refresh-implementation.md` — 15 Task, TDD 단계·완료조건·검증 명령 포함. 라이브러리 API 는 모듈을 내려받아 샘플 빌드로 확인함 |
 
 ## 4. ⏳ 남은 작업
 
 | 작업 | 핵심 액션 | 예상 |
 |---|---|---|
-| 구현 플랜 작성 | writing-plans. 사용자 전역 CLAUDE.md 의 "플랜 작성 템플릿"(완료조건·스킬 검색·경로 검증·Task 별 검증) 준수 | 1 세션 |
-| 인증 실험 (플랜 첫 Task 로 넣을 것) | launchd 에서 `claude -p "reply ok" --output-format json` 이 되는지. 안 되면 `claude setup-token` → 설정의 `oauth_token` | 짧음 |
-| 구현 | 플랜대로. 모듈 초기화 → 설정 → git → Claude 실행 → 오케스트레이터/Event → tui → slack → launchd → cmd 배선 | 플랜이 정함 |
-| 통합 검증 | `config init` 은 기존 파일 보존 → `run --dry-run` → `run --only <레포>` → `run` → `install` → 다음 날 DM 확인 | 1~2 세션 + 하룻밤 |
+| 인증 실험 (플랜 Task 1) | launchd 에서 `claude -p "reply ok" --output-format json` 이 되는지. 안 되면 `claude setup-token` → 설정의 `oauth_token` | 짧음 |
+| 구현 (플랜 Task 2~14) | 플랜대로. 모듈 초기화 → 설정 → git → 그래프 → Claude 실행 → tui Event → 결과/잠금/DM 문구 → 오케스트레이터 → slack → TUI → run 커맨드 → launchd → status/log | 플랜이 정함 |
+| 통합 검증 (플랜 Task 15) | `config init` 은 기존 파일 보존 → `run --dry-run` → `run --only <레포>` → `run` → `install` → 다음 날 DM 확인 | 1~2 세션 + 하룻밤 |
 
 ## 5. 🛡 누적 judgments
 
@@ -77,11 +77,11 @@
 // main.go
 if err := fang.Execute(context.Background(), cmd.Root()); err != nil { os.Exit(1) }
 
-// Charm v2 import 경로
+// Charm v2 import 경로 — go.mod 가 charm.land/... 로 모듈 경로를 선언한다 (github.com/charmbracelet/... 로 go get 하면 거부됨)
 import (
-    tea "github.com/charmbracelet/bubbletea/v2"
-    "github.com/charmbracelet/bubbles/v2/spinner"
-    "github.com/charmbracelet/lipgloss/v2"
+    tea "charm.land/bubbletea/v2"
+    "charm.land/bubbles/v2/spinner"
+    "charm.land/lipgloss/v2"
 )
 
 // 프로세스 그룹 단위 타임아웃

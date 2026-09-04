@@ -172,14 +172,16 @@ gofer/                                모듈 하나(module gofer), 바이너리 
 
 ### 의존성 (직접 6개, Go 모듈 프록시에서 확인한 최신 버전)
 
-| 역할 | 모듈 | 버전 |
+| 역할 | 모듈 (import 경로) | 버전 |
 |---|---|---|
 | CLI 프레임워크 | `github.com/spf13/cobra` | v1.10.2 |
 | help·에러·version·완성·man 스타일링 | `github.com/charmbracelet/fang` | v1.0.0 (README에 "experimental" 표기, 의존성은 모두 안정) |
-| 실행 화면 엔진 | `github.com/charmbracelet/bubbletea/v2` | v2.0.9 |
-| 스피너 | `github.com/charmbracelet/bubbles/v2` | v2.2.1 |
-| 색·표 | `github.com/charmbracelet/lipgloss/v2` | v2.0.6 |
+| 실행 화면 엔진 | `charm.land/bubbletea/v2` | v2.0.9 |
+| 스피너 | `charm.land/bubbles/v2` | v2.2.1 |
+| 색·표 | `charm.land/lipgloss/v2` | v2.0.6 |
 | 설정 파싱 | `github.com/BurntSushi/toml` | v1.6.0 |
+
+Charm v2 계열 셋은 GitHub 저장소는 `charmbracelet/` 아래에 있지만 go.mod 가 모듈 경로를 `charm.land/...` 로 선언한다(2026-09-04 플랜 작성 시 확인 — `github.com/charmbracelet/lipgloss/v2` 로 `go get` 하면 "module declares its path as: charm.land/lipgloss/v2" 로 거부된다). fang 은 `github.com/charmbracelet/fang` 그대로다.
 
 ## 6. 화면, 알림, 로그
 

@@ -125,7 +125,7 @@ gofer/
 
 **완료조건**: 프로브 로그에 `"is_error":false` 를 포함한 JSON 한 덩어리가 있고, 사용한 인증 경로(Keychain 또는 토큰)가 HANDOFF.md 8절에 적혀 있다. 검증: `grep -c '"is_error":false' <프로브 로그>` → `1`.
 
-- [ ] **Step 1: 프로브 plist 작성**
+- [x] **Step 1: 프로브 plist 작성**
 
 `$HOME` 을 실제 홈 경로로 치환해 스크래치 디렉토리에 저장한다. `RunAtLoad` 로 등록 즉시 1회 실행된다. PATH 는 launchd 기본값이 비어 있으므로 명시한다.
 
@@ -159,7 +159,7 @@ gofer/
 </plist>
 ```
 
-- [ ] **Step 2: 등록 → 결과 확인 → 해제**
+- [x] **Step 2: 등록 → 결과 확인 → 해제** (Keychain 인증 성공, `"is_error":false`, 비용 $0.83)
 
 ```bash
 SCRATCH=/private/tmp/claude-501/-Users-jaeyoungcho-lab-gofer/30f5b3fa-4072-497d-a3f4-93ddd59b9d16/scratchpad
@@ -171,7 +171,7 @@ launchctl bootout gui/$(id -u)/gofer.auth-probe
 
 Expected(성공): out.log 에 `{"type":"result", ... "is_error":false, ... "total_cost_usd":0.0..., ...}`.
 
-- [ ] **Step 3: 실패했으면 토큰 경로로 전환**
+- [x] **Step 3: 실패했으면 토큰 경로로 전환** (해당 없음 — Step 2 성공)
 
 err.log 에 로그인/인증 오류가 있으면:
 
@@ -181,7 +181,7 @@ claude setup-token      # 브라우저 로그인 → 토큰 문자열 출력
 
 출력된 토큰을 `~/.config/gofer/ua-refresh.toml` 의 `[claude] oauth_token = "..."` 에 넣고, 프로브 plist 의 `EnvironmentVariables` 에 `<key>CLAUDE_CODE_OAUTH_TOKEN</key><string>토큰</string>` 을 추가해 Step 2 를 다시 한다. 성공하면 plist 에서 토큰 줄을 지운다(스크래치라도 남기지 않는다).
 
-- [ ] **Step 4: 결과 기록**
+- [x] **Step 4: 결과 기록** (커밋 d1ce189)
 
 `docs/autopilot/ua-refresh/HANDOFF.md` 8절 "환경 사실" 목록 끝에 한 줄 추가: `- launchd 인증 실험(2026-09-04): Keychain 으로 됨 / 안 되어 oauth_token 사용 중` (해당하는 쪽). 커밋:
 
@@ -190,7 +190,7 @@ git add docs/autopilot/ua-refresh/HANDOFF.md
 git commit -m "docs: record launchd auth probe result"
 ```
 
-- [ ] **Step 5: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 5: `/demiurge:rl` 로 완료조건 검증** (3개 기준 통과)
 
 ---
 
@@ -210,14 +210,14 @@ git commit -m "docs: record launchd auth probe result"
 
 **완료조건**: `go build -o bin/gofer . && ./bin/gofer --help` 출력에 `ua-refresh` 가 있고, `./bin/gofer ua-refresh --help` 가 종료 코드 0. `go test ./... && go vet ./...` 통과. 직접 의존성은 이 시점에 cobra·fang 2개(`go list -m -f '{{if not .Indirect}}{{.Path}}{{end}}' all`).
 
-- [ ] **Step 1: 모듈과 의존성**
+- [x] **Step 1: 모듈과 의존성**
 
 ```bash
 go mod init gofer
 go get github.com/spf13/cobra@v1.10.2 github.com/charmbracelet/fang@v1.0.0
 ```
 
-- [ ] **Step 2: 실패하는 테스트 — 루트 help 에 도구가 보인다**
+- [x] **Step 2: 실패하는 테스트 — 루트 help 에 도구가 보인다**
 
 `cmd/root_test.go`:
 
@@ -244,12 +244,12 @@ func TestRootHelpListsTools(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 실패 확인**
+- [x] **Step 3: 실패 확인**
 
 Run: `go test ./cmd/`
 Expected: 컴파일 실패 (`undefined: Root`).
 
-- [ ] **Step 4: 구현**
+- [x] **Step 4: 구현**
 
 `cmd/uarefresh/uarefresh.go`:
 
@@ -339,19 +339,19 @@ lint:
 bin/
 ```
 
-- [ ] **Step 5: 통과 확인**
+- [x] **Step 5: 통과 확인**
 
 Run: `go mod tidy && go test ./... && go vet ./... && just build && ./bin/gofer --help && ./bin/gofer ua-refresh --help`
 Expected: 테스트 PASS, help 에 `ua-refresh` 표시.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add go.mod go.sum main.go cmd/ justfile .gitignore
 git commit -m "feat: scaffold gofer binary with ua-refresh command tree"
 ```
 
-- [ ] **Step 7: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 7: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -409,7 +409,7 @@ func ResolveExtraPath(entries []string) []string   // 항목마다 glob → 이�
 
 **완료조건**: `go test ./internal/uarefresh/ -run 'Config|Paths|ExtraPath|Template'` PASS. `HOME=$(mktemp -d) ./bin/gofer ua-refresh config init` 이 `$HOME/.config/gofer/ua-refresh.toml` 을 0600 으로 만들고, 같은 명령을 한 번 더 실행하면 "already exists" 오류로 종료 코드 1 이며 파일 내용이 그대로다.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/uarefresh/config_test.go`:
 
@@ -571,12 +571,12 @@ func TestPaths(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/uarefresh/`
 Expected: 컴파일 실패 (`undefined: Load` 등).
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 ```bash
 go get github.com/BurntSushi/toml@v1.6.0
@@ -848,19 +848,19 @@ func configCmd() *cobra.Command {
 	cmd.AddCommand(configCmd())
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./internal/uarefresh/ ./cmd/... && go vet ./... && just build && HOME=$(mktemp -d) sh -c './bin/gofer ua-refresh config init && ls -l $HOME/.config/gofer/ && ./bin/gofer ua-refresh config init; echo exit=$?'`
 Expected: PASS; 첫 init 은 `wrote ...`, 파일 권한 `-rw-------`, 두 번째는 `already exists` 오류에 `exit=1`.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/uarefresh/paths.go internal/uarefresh/config.go internal/uarefresh/config_test.go cmd/uarefresh/ go.mod go.sum
 git commit -m "feat(ua-refresh): config schema, validation and config init"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -897,7 +897,7 @@ func pushFromClone(t *testing.T, origin, trunk, name, content string) (hash stri
 
 **완료조건**: `go test ./internal/uarefresh/ -run 'Git|Branch|Tracked|Fetch|FFMerge|CommitExists'` PASS. 사용자 전역 git 설정(`commit.gpgsign` 등)과 무관하게 통과한다 — 검증: `GIT_CONFIG_GLOBAL=/dev/null go test ./internal/uarefresh/` 도 PASS.
 
-- [ ] **Step 1: 테스트 헬퍼**
+- [x] **Step 1: 테스트 헬퍼**
 
 `internal/uarefresh/gittest_test.go`:
 
@@ -973,7 +973,7 @@ func pushFromClone(t *testing.T, origin, trunk, name, content string) string {
 }
 ```
 
-- [ ] **Step 2: 실패하는 테스트**
+- [x] **Step 2: 실패하는 테스트**
 
 `internal/uarefresh/git_test.go`:
 
@@ -1062,12 +1062,12 @@ func TestCommitExists(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 실패 확인**
+- [x] **Step 3: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run 'Branch|Tracked|Fetch|FFMerge|CommitExists'`
 Expected: 컴파일 실패 (`undefined: CurrentBranch` 등).
 
-- [ ] **Step 4: 구현**
+- [x] **Step 4: 구현**
 
 `internal/uarefresh/git.go`:
 
@@ -1152,19 +1152,19 @@ func CommitExists(ctx context.Context, dir, hash string) bool {
 }
 ```
 
-- [ ] **Step 5: 통과 확인**
+- [x] **Step 5: 통과 확인**
 
 Run: `go test ./internal/uarefresh/ && GIT_CONFIG_GLOBAL=/dev/null go test ./internal/uarefresh/ && go vet ./...`
 Expected: PASS 두 번.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add internal/uarefresh/git.go internal/uarefresh/git_test.go internal/uarefresh/gittest_test.go
 git commit -m "feat(ua-refresh): git wrapper with temp-repo tests"
 ```
 
-- [ ] **Step 7: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 7: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -1196,7 +1196,7 @@ func DecideGraph(ctx context.Context, repo, head string) (d GraphDecision, graph
 
 **완료조건**: `go test ./internal/uarefresh/ -run Graph` PASS — 다섯 경우(그래프 없음 / 해시==HEAD / 해시 다르고 존재 / 해시 없는 커밋 / 레거시 디렉토리 우선) 모두.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/uarefresh/graph_test.go`:
 
@@ -1271,12 +1271,12 @@ func TestDecideGraph(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run Graph`
 Expected: 컴파일 실패 (`undefined: GraphDir`).
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/uarefresh/graph.go`:
 
@@ -1366,19 +1366,19 @@ func DecideGraph(ctx context.Context, repo, head string) (GraphDecision, string,
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./internal/uarefresh/ && go vet ./...`
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/uarefresh/graph.go internal/uarefresh/graph_test.go
 git commit -m "feat(ua-refresh): graph metadata and refresh decision"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -1425,7 +1425,7 @@ func (f fakeClaude) argsLines(t *testing.T) []string
 
 **완료조건**: `go test ./internal/uarefresh/ -run Claude` PASS — 인자·환경·cwd 기록 일치, `is_error` 오류, JSON 아님 오류, 타임아웃 시 손자 프로세스(`sleep`)까지 죽음, 프로세스 PATH 가 비어도 `extra_path` 로 `claude` 를 찾음. 타임아웃 테스트는 3초 안에 끝난다.
 
-- [ ] **Step 1: 가짜 claude 헬퍼**
+- [x] **Step 1: 가짜 claude 헬퍼**
 
 `internal/uarefresh/fakeclaude_test.go`:
 
@@ -1500,7 +1500,7 @@ func (f fakeClaude) argsLines(t *testing.T) []string {
 }
 ```
 
-- [ ] **Step 2: 실패하는 테스트**
+- [x] **Step 2: 실패하는 테스트**
 
 `internal/uarefresh/claude_test.go`:
 
@@ -1618,12 +1618,12 @@ func TestRunClaudeTimeoutKillsProcessGroup(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: 실패 확인**
+- [x] **Step 3: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run Claude`
 Expected: 컴파일 실패 (`undefined: RunClaude`).
 
-- [ ] **Step 4: 구현**
+- [x] **Step 4: 구현**
 
 `internal/uarefresh/claude.go`:
 
@@ -1778,19 +1778,19 @@ func RunClaude(ctx context.Context, o ClaudeOptions) (ClaudeResult, error) {
 }
 ```
 
-- [ ] **Step 5: 통과 확인**
+- [x] **Step 5: 통과 확인**
 
 Run: `go test ./internal/uarefresh/ -run Claude -v 2>&1 | tail -20 && go vet ./...`
 Expected: 6개 PASS, `TestRunClaudeTimeoutKillsProcessGroup` 이 3초 이내.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add internal/uarefresh/claude.go internal/uarefresh/claude_test.go internal/uarefresh/fakeclaude_test.go
 git commit -m "feat(ua-refresh): run claude with process-group timeout and json parsing"
 ```
 
-- [ ] **Step 7: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 7: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -1845,7 +1845,7 @@ func (p *Plain) Write(ev Event)
 
 **완료조건**: `go test ./internal/tui/` PASS. 패키지에 ua-refresh 전용 단어("repo", "graph", "understand")가 없다 — 검증: `grep -n -i -E 'repo|graph|understand' internal/tui/*.go` 결과 없음.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/tui/plain_test.go`:
 
@@ -1904,12 +1904,12 @@ func TestOutcomeSymbols(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/tui/`
 Expected: 컴파일 실패.
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/tui/event.go`:
 
@@ -2077,19 +2077,19 @@ func (p *Plain) Write(ev Event) {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./internal/tui/ && go vet ./... && grep -n -i -E 'repo|graph|understand' internal/tui/*.go; echo "grep exit=$?"`
 Expected: PASS, grep 결과 없음(`grep exit=1`). (테스트 파일의 예시 문자열 "graph updated" 는 `_test.go` 라 검색 대상에 포함되지만 — `plain_test.go` 의 `/understand …`·`graph updated` 는 임의 문구다. 검사는 `internal/tui/*.go` 중 `_test.go` 를 제외하고 본다: `ls internal/tui/*.go | grep -v _test | xargs grep -n -i -E 'repo|graph|understand'`.)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/tui/
 git commit -m "feat(tui): shared progress events, summary and plain-line consumer"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -2143,7 +2143,7 @@ func SlackText(r RunResult) string              // 설계 6절 DM 본문
 
 **완료조건**: `go test ./internal/uarefresh/ -run 'Result|Lock|Slack|ExitCode'` PASS. DM 본문이 설계 6절 예시와 같은 구조(헤더 · 레포 줄 · `로그:` 줄)다.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/uarefresh/result_test.go`:
 
@@ -2293,12 +2293,12 @@ func TestSlackTextSkippedRow(t *testing.T) {
 
 (`report_test.go` 의 import 에 `"strings"` 를 포함한다.)
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run 'Result|Lock|Slack|ExitCode'`
 Expected: 컴파일 실패.
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/uarefresh/result.go`:
 
@@ -2536,19 +2536,19 @@ func shortenHome(p string) string {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./internal/uarefresh/ && go vet ./...`
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/uarefresh/result.go internal/uarefresh/result_test.go internal/uarefresh/lock.go internal/uarefresh/lock_test.go internal/uarefresh/report.go internal/uarefresh/report_test.go
 git commit -m "feat(ua-refresh): run results, lock file and slack report text"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -2582,7 +2582,7 @@ Event 규약 (Task 11 의 화면과 Task 12 의 dry-run 이 의존):
 
 **완료조건**: `go test ./internal/uarefresh/ -run 'Run[A-Z]|Guard'` PASS — 최신(Claude 미호출) · 갱신 · `--full` · 브랜치 가드 · 미커밋 가드 · ff 실패(Claude 미호출) · 해시 미갱신 실패 · is_error 실패 · 실패 후 다음 레포 계속. 오케스트레이터 파일에 `bubbletea`·`lipgloss`·`fmt.Print` 가 없다(화면을 모른다).
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/uarefresh/orchestrator_test.go`:
 
@@ -2784,12 +2784,12 @@ func TestGuardReasonPasses(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run 'Run[A-Z]|Guard'`
 Expected: 컴파일 실패 (`undefined: Run`).
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/uarefresh/orchestrator.go`:
 
@@ -2978,19 +2978,19 @@ func localCommitsText(n int) string {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./internal/uarefresh/ && go vet ./... && grep -n -E 'bubbletea|lipgloss|fmt\.Print' internal/uarefresh/orchestrator.go; echo "grep exit=$?"`
 Expected: PASS, `grep exit=1`.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/uarefresh/orchestrator.go internal/uarefresh/orchestrator_test.go
 git commit -m "feat(ua-refresh): orchestrate repos sequentially and emit progress events"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증** (executing-plans 로 실행 중이면 이어서 `/code-review`)
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증** (executing-plans 로 실행 중이면 이어서 `/code-review`)
 
 ---
 
@@ -3015,7 +3015,7 @@ func MacNotify(ctx context.Context, title, message string) error // osascript -e
 
 **완료조건**: `go test ./internal/slack/ && go test ./internal/uarefresh/ -run Notify` PASS — 요청 본문·Content-Type 확인, 5xx 오류 문구, osascript 인자와 따옴표 이스케이프.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/slack/webhook_test.go`:
 
@@ -3097,12 +3097,12 @@ func TestMacNotifyBuildsAppleScript(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/slack/ ./internal/uarefresh/ -run 'Post|Notify'`
 Expected: 컴파일 실패.
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/slack/webhook.go`:
 
@@ -3169,19 +3169,19 @@ func appleScriptString(s string) string {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./internal/slack/ ./internal/uarefresh/ && go vet ./...`
 Expected: PASS.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/slack/ internal/uarefresh/notify.go internal/uarefresh/notify_test.go
 git commit -m "feat: slack incoming webhook client and macOS notification fallback"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -3225,7 +3225,7 @@ func Run(ctx context.Context, o Options, events <-chan Event) error
 
 **완료조건**: `go test ./internal/tui/` PASS(골든 렌더링 2종 + AllDone → Quit). Step 5 의 수동 확인에서 스피너가 돌고, 끝난 뒤 요약 줄이 터미널에 남아 있다. `internal/tui` 의 비테스트 파일에 `repo|graph|understand` 가 없다.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/tui/model_test.go`:
 
@@ -3325,12 +3325,12 @@ func TestUpdateInterruptsOnCtrlC(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/tui/`
 Expected: 컴파일 실패 (`undefined: NewModel`).
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 ```bash
 go get charm.land/bubbletea/v2@v2.0.9 charm.land/bubbles/v2@v2.2.1 charm.land/lipgloss/v2@v2.0.6
@@ -3606,12 +3606,12 @@ func Run(ctx context.Context, o Options, events <-chan Event) error {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./internal/tui/ && go vet ./... && ls internal/tui/*.go | grep -v _test | xargs grep -n -i -E 'repo|graph|understand'; echo "grep exit=$?"`
 Expected: PASS, `grep exit=1`.
 
-- [ ] **Step 5: 수동 확인 — 실제 터미널에서 스피너와 마지막 화면**
+- [x] **Step 5: 수동 확인 — 실제 터미널에서 스피너와 마지막 화면**
 
 스크래치에 임시 main 을 만들어 돌려본다 (레포에 넣지 않는다):
 
@@ -3659,7 +3659,7 @@ mkdir -p ./cmd/_tuidemo && cp "$S/main.go" ./cmd/_tuidemo/main.go && go run ./cm
 
 Expected: 처리 중인 줄에 스피너와 경과 시간이 움직이고, 끝난 뒤 세 줄과 요약(`1 updated · 1 up to date · 0 skipped · 1 failed · $1.83`)이 터미널에 남는다. `| cat` 을 붙여 실행하면 같은 내용이 한 줄 로그로 나온다. (`cmd/_tuidemo` 는 `_` 접두어라 `go build ./...` 가 무시하지만, 확인 후 반드시 지운다.)
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git status --short   # cmd/_tuidemo 가 없어야 한다
@@ -3667,7 +3667,7 @@ git add internal/tui/ go.mod go.sum
 git commit -m "feat(tui): bubbletea progress screen with plain-log fallback"
 ```
 
-- [ ] **Step 7: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 7: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -3698,7 +3698,7 @@ func RunCommand(ctx context.Context, o CommandOptions) error
 
 **완료조건**: `go test ./internal/uarefresh/ -run 'Command|DryRun'` PASS — 끝까지 실행(DM·last-run·로그·잠금 해제) · skipped 면 `ErrIncomplete` 이지만 DM 은 감 · Slack 실패 시 osascript · `--only` 필터와 없는 이름 오류 · dry-run 은 git/claude/파일을 건드리지 않음 · 잠금 중이면 `ErrAlreadyRunning`. `just build && ./bin/gofer ua-refresh run --help` 에 `--dry-run`, `--only` 가 보인다.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/uarefresh/command_test.go`:
 
@@ -3929,12 +3929,12 @@ func TestRunCommandRefusesWhenLocked(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run 'Command|DryRun'`
 Expected: 컴파일 실패 (`undefined: RunCommand`).
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/uarefresh/command.go`:
 
@@ -4201,19 +4201,19 @@ func main() {
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./... && go vet ./... && just build && ./bin/gofer ua-refresh run --help | grep -E -- '--dry-run|--only'`
 Expected: 전부 PASS, 두 플래그 표시.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/uarefresh/command.go internal/uarefresh/command_test.go cmd/uarefresh/run.go cmd/uarefresh/uarefresh.go main.go
 git commit -m "feat(ua-refresh): run command with dry-run, lock, daily log, slack report"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증** (executing-plans 로 실행 중이면 이어서 `/code-review`)
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증** (executing-plans 로 실행 중이면 이어서 `/code-review`)
 
 ---
 
@@ -4247,7 +4247,7 @@ func Installed(ctx context.Context) (bool, error)                            // 
 
 **완료조건**: `go test ./internal/uarefresh/ -run 'Plist|ParseAt|Install|Uninstall|Installed'` PASS. `just build && ./bin/gofer ua-refresh install --help && ./bin/gofer ua-refresh uninstall --help` 종료 코드 0. **실제 등록은 Task 15 에서만 한다.**
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/uarefresh/launchd_test.go`:
 
@@ -4378,12 +4378,12 @@ func TestInstalled(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run 'Plist|ParseAt|Install|Uninstall|Installed'`
 Expected: 컴파일 실패.
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/uarefresh/launchd.go`:
 
@@ -4593,19 +4593,19 @@ func uninstallCmd() *cobra.Command {
 	cmd.AddCommand(installCmd(), uninstallCmd())
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./... && go vet ./... && just build && ./bin/gofer ua-refresh install --help >/dev/null && ./bin/gofer ua-refresh uninstall --help >/dev/null && echo OK`
 Expected: PASS, `OK`.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/uarefresh/launchd.go internal/uarefresh/launchd_test.go cmd/uarefresh/install.go cmd/uarefresh/uarefresh.go
 git commit -m "feat(ua-refresh): launchd install/uninstall with generated plist"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 
@@ -4628,7 +4628,7 @@ func ShowLog(ctx context.Context, path string, w io.Writer, follow bool) error
 
 **완료조건**: `go test ./internal/uarefresh/ -run 'Status|ShowLog'` PASS. `just build && ./bin/gofer ua-refresh status` 가 (설정이 유효하면) 세 구획(launchd · last run · repos)을 출력하고, `./bin/gofer ua-refresh log` 가 오늘 로그 또는 `no log yet` 을 출력한다.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 `internal/uarefresh/status_test.go`:
 
@@ -4750,12 +4750,12 @@ func (l lockedWriter) Write(b []byte) (int, error) {
 }
 ```
 
-- [ ] **Step 2: 실패 확인**
+- [x] **Step 2: 실패 확인**
 
 Run: `go test ./internal/uarefresh/ -run 'Status|ShowLog'`
 Expected: 컴파일 실패.
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `internal/uarefresh/status.go`:
 
@@ -4947,19 +4947,19 @@ func logCmd() *cobra.Command {
 	cmd.AddCommand(statusCmd(), logCmd())
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [x] **Step 4: 통과 확인**
 
 Run: `go test ./... && go vet ./... && just build && ./bin/gofer ua-refresh log; ./bin/gofer ua-refresh status`
 Expected: PASS. `log` 는 `no log yet: ...`. `status` 는 설정이 유효하면 세 구획을 출력하고, `webhook_url` 이 아직 비어 있으면 설정 오류를 출력한다(이것도 정상 — Task 15 에서 채운다).
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add internal/uarefresh/status.go internal/uarefresh/status_test.go internal/uarefresh/logcmd.go internal/uarefresh/logcmd_test.go cmd/uarefresh/status.go cmd/uarefresh/log.go cmd/uarefresh/uarefresh.go
 git commit -m "feat(ua-refresh): status and log commands"
 ```
 
-- [ ] **Step 6: `/demiurge:rl` 로 완료조건 검증**
+- [x] **Step 6: `/demiurge:rl` 로 완료조건 검증**
 
 ---
 

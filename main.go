@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"syscall"
 
 	"github.com/charmbracelet/fang"
 
@@ -13,7 +14,11 @@ import (
 var version = "dev"
 
 func main() {
-	if err := fang.Execute(context.Background(), cmd.Root(), fang.WithVersion(version)); err != nil {
+	err := fang.Execute(context.Background(), cmd.Root(),
+		fang.WithVersion(version),
+		fang.WithNotifySignal(os.Interrupt, syscall.SIGTERM),
+	)
+	if err != nil {
 		os.Exit(1)
 	}
 }

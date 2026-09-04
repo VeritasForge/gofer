@@ -11,5 +11,6 @@ func Cmd() *cobra.Command {
 		Short: "Refresh Understand-Anything knowledge graphs of your repos every morning",
 	}
 	cmd.AddCommand(configCmd())
+	cmd.AddCommand(runCmd())
 	return cmd
 }

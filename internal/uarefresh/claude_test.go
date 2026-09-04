@@ -23,7 +23,7 @@ func TestRunClaudeArgsEnvAndCwd(t *testing.T) {
 	if res.TotalCostUSD != 0.1 || res.IsError {
 		t.Errorf("result = %+v", res)
 	}
-	want := []string{"-p", "/understand --full", "--dangerously-skip-permissions", "--output-format", "json", "--max-budget-usd", "20", "--model", "example-model"}
+	want := []string{"-p", "/understand --full", "--dangerously-skip-permissions", "--output-format", "json", "--max-budget-usd", "20", "--append-system-prompt", UnattendedSystemPrompt, "--model", "example-model"}
 	if got := f.argsLines(t); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("args = %q", got)
 	}
@@ -44,7 +44,7 @@ func TestRunClaudeWithoutOptionalFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"-p", "/understand", "--dangerously-skip-permissions", "--output-format", "json", "--max-budget-usd", "7.5"}
+	want := []string{"-p", "/understand", "--dangerously-skip-permissions", "--output-format", "json", "--max-budget-usd", "7.5", "--append-system-prompt", UnattendedSystemPrompt}
 	if got := f.argsLines(t); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("args = %q", got)
 	}

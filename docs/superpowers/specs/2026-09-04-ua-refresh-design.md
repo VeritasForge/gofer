@@ -51,6 +51,7 @@
 - `claude -p "/understand"`처럼 프롬프트에 스킬명을 넣으면 플러그인 스킬이 확장된다. `--bare`는 플러그인을 건너뛰므로 쓰지 않는다.
 - `/understand`는 Bash·서브에이전트·파일 쓰기를 모두 쓰므로 `--dangerously-skip-permissions`가 필요하다. `--permission-mode dontAsk`는 허용 규칙 밖 동작을 거부해 맞지 않는다.
 - `--output-format json`의 결과에 `is_error`, `total_cost_usd`가 있다. `--max-budget-usd`로 지출 상한을 건다.
+- `/understand`는 `.understandignore` 확인과 100개 초과 파일 게이트에서 사용자 확인을 기다린다(스킬 2.9.4 Phase 0.5, Phase 1 gate). `-p`에서는 답할 사람이 없어 질문만 남기고 정상 종료하므로, `--append-system-prompt`로 "무인 실행: 확인 요청은 기본값으로 진행, 대시보드 실행 금지"를 명시한다 (2026-09-04 통합 검증에서 발견).
 - launchd에서 Keychain 로그인이 읽히는지는 문서로 단정할 수 없다. **구현 첫 단계에서 실험**하고, 안 되면 `claude setup-token`으로 만든 토큰을 `CLAUDE_CODE_OAUTH_TOKEN` 환경변수로 넘긴다.
 - launchd는 잠든 동안 놓친 예약을 깨어날 때 실행한다(`man launchd.plist`, StartCalendarInterval). cron은 건너뛰므로 launchd를 쓴다.
 - launchd의 PATH는 비어 있다시피 하므로 `claude`, `node`, `pnpm` 경로를 도구가 직접 구성한다.
@@ -124,7 +125,8 @@ launchd (설정 시각, 잠들었으면 wake 직후) ──▶ gofer ua-refresh 
    │      같음 ──▶ 최신(up-to-date), Claude 호출 안 함                     │
    │      해시가 레포에 없음 ──▶ --full 로 실행                             │
    │ ⑤ claude -p "/understand[ --full]" --dangerously-skip-permissions     │
-   │        --output-format json --max-budget-usd N [--model M]           │
+   │        --output-format json --max-budget-usd N                       │
+   │        --append-system-prompt <무인 실행 지시> [--model M]            │
    │      cwd = 레포 루트, 시간 상한 timeout_min, 프로세스 그룹 단위 종료   │
    │ ⑥ 검증: 그래프 해시 == HEAD 면 갱신(updated), 아니면 실패(failed)      │
    └────────────────────────────────────────────────────────────────────┘
@@ -145,6 +147,7 @@ launchd (설정 시각, 잠들었으면 wake 직후) ──▶ gofer ua-refresh 
 - stdout(JSON)은 파싱해 `is_error`, `total_cost_usd`를 기록하고, stderr는 로그로 보낸다.
 - 시간 상한 초과 시 프로세스 그룹에 SIGTERM, 잠시 후 SIGKILL. `/understand`가 여러 서브셸을 띄우므로 그룹 단위가 아니면 고아 프로세스가 남는다.
 - 성공 판정은 Claude의 종료 코드가 아니라 **그래프 해시가 HEAD와 같아졌는지**로 한다. 스킬이 중간에 실패해도 정상 종료할 수 있기 때문이다.
+- 실패 시 claude의 마지막 응답 첫 줄을 사유에 붙이고 앞부분을 로그에 남긴다 — 스킬이 질문으로 끝났는지 DM만 보고 알 수 있게.
 
 ## 5. 코드 구조
 

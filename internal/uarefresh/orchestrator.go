@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	"gofer/internal/tui"
@@ -165,6 +166,9 @@ func processRepo(ctx context.Context, p RunParams, logger *log.Logger, i int, re
 	})
 	rr.CostUSD = cres.TotalCostUSD
 	logger.Printf("[%s] claude: is_error=%v cost=$%.2f timed_out=%v err=%v", rr.Name, cres.IsError, cres.TotalCostUSD, cres.TimedOut, cerr)
+	if cres.Result != "" {
+		logger.Printf("[%s] claude result: %s", rr.Name, headOfText(cres.Result, 600))
+	}
 
 	// ⑥ 검증: 종료 코드가 아니라 그래프 해시가 HEAD 가 됐는지로 판정한다 (설계 4절).
 	if after, err := GraphHash(repo.Path); err == nil && after == head {
@@ -174,7 +178,22 @@ func processRepo(ctx context.Context, p RunParams, logger *log.Logger, i int, re
 	if cerr != nil {
 		return fail(cerr.Error())
 	}
-	return fail(fmt.Sprintf("graph hash still not at HEAD %.7s after %s", head, decision))
+	notUpdated := fmt.Sprintf("graph hash still not at HEAD %.7s after %s", head, decision)
+	if cres.Result != "" {
+		notUpdated = fmt.Sprintf("graph hash still not at HEAD %.7s after %s — claude replied: %s", head, decision, headOfText(cres.Result, 120))
+	}
+	return fail(notUpdated)
+}
+
+// headOfText 는 여러 줄일 수 있는 텍스트를 로그·사유 한 줄에 넣기 좋게 다듬는다:
+// 개행·탭을 공백 하나로 뭉치고 앞뒤 공백을 자른 뒤, n 룬을 넘으면 "…"를 붙여 자른다.
+func headOfText(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 // doneEvent 는 RepoResult 를 화면용 완료 Event 로 바꾼다.

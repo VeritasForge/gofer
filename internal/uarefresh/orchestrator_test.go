@@ -160,6 +160,9 @@ func TestRunFailsWhenGraphHashNotUpdated(t *testing.T) {
 	if rr.Status != StatusFailed || !strings.Contains(rr.Reason, "graph hash still not at HEAD") || rr.CostUSD != 0.1 {
 		t.Fatalf("result = %+v", rr)
 	}
+	if !strings.Contains(rr.Reason, "claude replied: done") {
+		t.Errorf("reason should surface claude's reply: %q", rr.Reason)
+	}
 }
 
 func TestRunFailsWhenClaudeReportsError(t *testing.T) {
@@ -231,6 +234,25 @@ func TestRunFailsWhenRepoStepTimesOut(t *testing.T) {
 	}
 	if f.called() {
 		t.Error("claude must not run once the repo step already timed out")
+	}
+}
+
+func TestHeadOfText(t *testing.T) {
+	cases := []struct {
+		name, in, want string
+		n              int
+	}{
+		{"collapses newlines and tabs", "line one\nline\ttwo\n\nline three", "line one line two line three", 100},
+		{"truncates and adds ellipsis", "abcdefghij", "abcde…", 5},
+		{"empty stays empty", "", "", 100},
+		{"exact length is not truncated", "abcde", "abcde", 5},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := headOfText(c.in, c.n); got != c.want {
+				t.Errorf("headOfText(%q, %d) = %q, want %q", c.in, c.n, got, c.want)
+			}
+		})
 	}
 }
 

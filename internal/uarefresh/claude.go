@@ -40,7 +40,20 @@ type ClaudeResult struct {
 // killGrace 는 SIGTERM 뒤 SIGKILL 까지 주는 유예다.
 const killGrace = 10 * time.Second
 
+// UnattendedSystemPrompt 는 launchd 무인 실행에서 /understand 가 사용자 확인을 기다리지 않게 하는 시스템 프롬프트 추가분이다.
+// 스킬은 .understandignore 확인과 100개 초과 파일 게이트에서 "confirm" 을 기다리는데(-p 모드에서는 답할 사람이 없다),
+// 그 자리에서 기본값으로 진행하라고 못 박는다. 대시보드 같은 장기 실행 서버도 금지한다.
+// 문장 사이에 실제 개행을 넣지 않는다 — 인자 하나가 여러 줄이면 가짜 claude 스크립트(fakeclaude_test.go)가
+// 인자를 줄 단위로 기록하는 방식과 어긋나 하나의 인자가 여러 줄로 쪼개져 기록된다.
+const UnattendedSystemPrompt = "This is an unattended, non-interactive run started by a scheduler; no human can reply. " +
+	"Never stop to ask a question or wait for confirmation. Whenever a skill or instruction says to ask the user, " +
+	"confirm, or wait, treat the answer as \"confirm — proceed with the defaults\": keep the existing .understandignore as is, " +
+	"accept the changed-file count however large, use the available budget, and continue the incremental update " +
+	"until knowledge-graph.json and meta.json are written. Do not launch the dashboard or any long-running server. " +
+	"If the graph is already up to date at this commit, do nothing and exit."
+
 // ClaudeArgs 는 실행 인자다. --bare 는 플러그인 스킬을 건너뛰므로 쓰지 않는다 (설계 2절).
+// --append-system-prompt 로 UnattendedSystemPrompt 를 붙여 /understand 의 확인 대기 게이트를 무인 실행에 맞춘다.
 func ClaudeArgs(o ClaudeOptions) []string {
 	prompt := "/understand"
 	if o.Full {
@@ -51,6 +64,7 @@ func ClaudeArgs(o ClaudeOptions) []string {
 		"--dangerously-skip-permissions",
 		"--output-format", "json",
 		"--max-budget-usd", strconv.FormatFloat(o.BudgetUSD, 'f', -1, 64),
+		"--append-system-prompt", UnattendedSystemPrompt,
 	}
 	if o.Model != "" {
 		args = append(args, "--model", o.Model)

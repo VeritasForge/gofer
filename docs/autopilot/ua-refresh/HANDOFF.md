@@ -71,6 +71,7 @@
 - macOS 에 `timeout`/`gtimeout` 없음. `launchctl bootstrap gui/$(id -u) <plist>` / `bootout` 사용
 - 이미 `~/Library/LaunchAgents` 에 다른 LaunchAgent 들이 있음 (충돌 없음)
 - launchd 인증 실험(2026-09-04): Keychain 인증으로 됨 (claude -p 가 launchd 에서 JSON 반환, total_cost_usd=0.83). oauth_token 불필요
+- 통합 검증(2026-09-04): `/understand` 가 `.understandignore` 확인·100파일 게이트에서 confirm 을 기다려 무인 실행이 질문만 남기고 끝남 → `--append-system-prompt` 로 무인 지시 추가. 첫 실제 실행 비용 $0.76 / 1분 20초(질문까지)
 
 코드 조각:
 

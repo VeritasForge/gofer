@@ -10,5 +10,6 @@ func Cmd() *cobra.Command {
 		Use:   "ua-refresh",
 		Short: "Refresh Understand-Anything knowledge graphs of your repos every morning",
 	}
+	cmd.AddCommand(configCmd())
 	return cmd
 }

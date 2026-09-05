@@ -5053,7 +5053,7 @@ git add docs/autopilot/ua-refresh/HANDOFF.md
 git commit -m "docs: ua-refresh integration verified, launchd job installed"
 ```
 
-- [ ] **Step 9: 다음 날 아침 운영 확인**
+- [x] **Step 9: 다음 날 아침 운영 확인** (2026-09-05: 07:30:04 launchd 자동 기상, 08:10:26 종료 — 2 updated · 4 up to date · 0 skipped · 0 failed · $12.49, 잠금 해제, DM 정상 발송)
 
 Expected: 설정 시각(또는 wake 직후)에 DM 도착. `gofer ua-refresh status` 의 `last run` 이 오늘 날짜. 도착하지 않았으면 `~/Library/Logs/gofer/ua-refresh/launchd.log` 와 오늘 로그를 본다 — 인증(Task 1 결과 재확인), PATH(`extra_path`), 잠금 파일 순으로 의심한다.
 

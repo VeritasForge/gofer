@@ -4,6 +4,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
+	"gofer/cmd/holiday"
 	"gofer/cmd/uarefresh"
 )
 
@@ -14,5 +15,6 @@ func Root() *cobra.Command {
 		Short: "Personal CLI errand runner: gofer <tool> <action>",
 	}
 	root.AddCommand(uarefresh.Cmd())
+	root.AddCommand(holiday.Cmd())
 	return root
 }

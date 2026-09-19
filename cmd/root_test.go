@@ -18,3 +18,16 @@ func TestRootHelpListsTools(t *testing.T) {
 		t.Fatalf("help should list ua-refresh, got:\n%s", out.String())
 	}
 }
+
+func TestRootHelpListsHoliday(t *testing.T) {
+	root := Root()
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{"--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "holiday") {
+		t.Fatalf("help should list holiday, got:\n%s", out.String())
+	}
+}

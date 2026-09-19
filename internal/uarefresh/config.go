@@ -22,7 +22,8 @@ type Config struct {
 }
 
 type ScheduleConfig struct {
-	At string `toml:"at"` // "HH:MM"
+	At           string `toml:"at"`            // "HH:MM"
+	WorkdaysOnly bool   `toml:"workdays_only"` // 적지 않으면 true (Load 참고)
 }
 
 type ClaudeConfig struct {
@@ -57,7 +58,8 @@ func (r RepoConfig) Name() string { return filepath.Base(r.Path) }
 
 // Template 은 `config init` 이 쓰는 설정 템플릿이다 (설계 3절 원문).
 const Template = `[schedule]
-at = "07:30"                 # install 이 plist 에 반영
+at            = "07:30"      # install 이 plist 에 반영
+workdays_only = true         # 토·일·공휴일에는 실행하지 않는다 (먼저 `+"`gofer holiday sync`"+` 로 목록을 받는다)
 
 [claude]
 budget_usd  = 20             # 레포당 지출 상한 (폭주 방지용)
@@ -91,6 +93,11 @@ func Load(path string) (*Config, error) {
 	var errs []error
 	for _, k := range md.Undecoded() {
 		errs = append(errs, fmt.Errorf("unknown key %q", k.String()))
+	}
+	// workdays_only 는 적지 않으면 켜진 것으로 본다. Go 의 bool 기본값이 false 라서
+	// 그냥 두면 "항목 없음" 과 "false 라고 적음" 이 구별되지 않고 기본값이 뒤집힌다.
+	if !md.IsDefined("schedule", "workdays_only") {
+		cfg.Schedule.WorkdaysOnly = true
 	}
 	for i := range cfg.Repos {
 		cfg.Repos[i].Path = ExpandHome(cfg.Repos[i].Path)

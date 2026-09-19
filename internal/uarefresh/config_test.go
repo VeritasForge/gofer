@@ -162,3 +162,37 @@ func TestPaths(t *testing.T) {
 		t.Errorf("paths: %+v", p)
 	}
 }
+
+// TestWorkdaysOnlyDefaultsToOn 은 항목을 적지 않은 기존 설정 파일이 켜진 것으로 읽히는지 본다.
+// Go 의 bool 기본값은 false 라서, 그냥 읽으면 여기서 조용히 꺼짐으로 뒤집힌다.
+func TestWorkdaysOnlyDefaultsToOn(t *testing.T) {
+	cfg, err := Load(writeConfig(t, validConfig))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Schedule.WorkdaysOnly {
+		t.Error("workdays_only should default to true when the key is absent")
+	}
+}
+
+func TestWorkdaysOnlyCanBeTurnedOff(t *testing.T) {
+	body := strings.Replace(validConfig, `at = "07:30"`, "at = \"07:30\"\nworkdays_only = false", 1)
+	cfg, err := Load(writeConfig(t, body))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Schedule.WorkdaysOnly {
+		t.Error("workdays_only = false must be honoured")
+	}
+}
+
+func TestWorkdaysOnlyExplicitTrue(t *testing.T) {
+	body := strings.Replace(validConfig, `at = "07:30"`, "at = \"07:30\"\nworkdays_only = true", 1)
+	cfg, err := Load(writeConfig(t, body))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Schedule.WorkdaysOnly {
+		t.Error("workdays_only = true must be honoured")
+	}
+}

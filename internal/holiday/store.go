@@ -11,7 +11,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// DefaultURL 은 대한민국 공휴일 달력이다. 설정에서 주소를 바꾸면 다른 나라 달력도 쓸 수 있다.
+// DefaultURL 은 대한민국 공휴일 달력이다. 설정에서 주소를 바꾸면 다른 국가·기관의 달력도
+// 쓸 수 있지만, DESCRIPTION 이 한국어 낱말 "공휴일"로 시작하는 항목만 골라내므로
+// (ParseICS 참고) 그 낱말을 쓰는 한국어 로캘 피드에만 실제로 통한다.
 const DefaultURL = "https://calendar.google.com/calendar/ical/ko.south_korea%23holiday%40group.v.calendar.google.com/public/basic.ics"
 
 // Config 는 ~/.config/gofer/holiday.toml 이다. 사람만 쓰고 프로그램은 읽기만 한다 —
@@ -22,7 +24,7 @@ type Config struct {
 	Ignore []string `toml:"ignore"`
 }
 
-// ConfigTemplate 은 `holiday config init` 이 쓰는 설정 템플릿이다.
+// ConfigTemplate 은 `gofer holiday sync --init-config` 가 쓰는 설정 템플릿이다.
 const ConfigTemplate = `# 내려받을 달력 주소. 비우면 대한민국 공휴일 달력을 쓴다.
 url = "` + DefaultURL + `"
 

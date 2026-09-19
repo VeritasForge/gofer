@@ -64,6 +64,11 @@ func expand(start, end, name string) []Entry {
 	if err != nil || !to.After(from) {
 		to = from.AddDate(0, 0, 1)
 	}
+	// 공휴일은 실제로 일주일을 넘지 않는다. 응답 본문 크기는 이미 제한돼 있지만,
+	// 깨졌거나 악의적인 항목 하나가 날짜 범위를 극단으로 벌려 메모리를 소진하는 일을 막는다.
+	if to.Sub(from) > 366*24*time.Hour {
+		return nil
+	}
 	var out []Entry
 	for d := from; d.Before(to); d = d.AddDate(0, 0, 1) {
 		out = append(out, Entry{Date: d.Format(dateLayout), Name: name})

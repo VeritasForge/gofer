@@ -19,7 +19,8 @@ type Calendar struct {
 }
 
 // New 는 항목 목록과 수록 기간으로 달력을 만든다. extra 는 더할 날짜, ignore 는 뺄 날짜다.
-// ignore 가 가장 세다 — extra 에 있어도 ignore 에 있으면 일하는 날이다.
+// ignore 는 목록과 extra 를 이긴다. 주말 판정은 ignore 로 뒤집을 수 없다 — 그날 반드시
+// 실행해야 하면 --force 를 쓴다.
 func New(entries []Entry, from, to string, extra, ignore []string) *Calendar {
 	m := make(map[string]string, len(entries)+len(extra))
 	for _, e := range entries {

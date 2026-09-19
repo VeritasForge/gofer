@@ -65,6 +65,15 @@ func TestWeekendWithoutList(t *testing.T) {
 	}
 }
 
+// TestIgnoreCannotOverrideWeekend 은 주말 날짜를 ignore 에 넣어도 그날이 일하는 날로
+// 바뀌지 않는지 본다 — ignore 는 공휴일 목록만 지울 뿐, 주말 판정은 따로 본다.
+func TestIgnoreCannotOverrideWeekend(t *testing.T) {
+	cal := New(nil, "2026-01-01", "2026-12-31", nil, []string{"2026-03-14"}) // 토요일
+	if cal.IsWorkday(day(t, "2026-03-14")) {
+		t.Error("ignore should not turn a Saturday into a workday")
+	}
+}
+
 func TestCovers(t *testing.T) {
 	cal := New(nil, "2026-01-01", "2026-12-31", nil, nil)
 	if !cal.Covers(day(t, "2026-12-31")) {

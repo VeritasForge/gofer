@@ -59,7 +59,7 @@ func (r RepoConfig) Name() string { return filepath.Base(r.Path) }
 // Template 은 `config init` 이 쓰는 설정 템플릿이다 (설계 3절 원문).
 const Template = `[schedule]
 at            = "07:30"      # install 이 plist 에 반영
-workdays_only = true         # 토·일·공휴일에는 실행하지 않는다 (먼저 `+"`gofer holiday sync`"+` 로 목록을 받는다)
+workdays_only = true         # 토·일·공휴일에는 실행하지 않는다 (먼저 ` + "`gofer holiday sync`" + ` 로 목록을 받는다)
 
 [claude]
 budget_usd  = 20             # 레포당 지출 상한 (폭주 방지용)

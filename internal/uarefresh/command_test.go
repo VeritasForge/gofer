@@ -436,3 +436,103 @@ func TestRunCommandPutsHolidayWarningInSlack(t *testing.T) {
 		t.Errorf("last-run.json should keep the warning: %v %+v", err, last.Warning)
 	}
 }
+
+// TestHolidayConfigErrorDoesNotBlockRun 은 holiday.toml 오타처럼 설정 자체가 깨졌을 때도
+// 하루 실행이 조용히 멎지 않는지 본다 — 판정 없이 진행하고 문제를 경고로 알려야 한다.
+func TestHolidayConfigErrorDoesNotBlockRun(t *testing.T) {
+	work, origin := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	pushFromClone(t, origin, "main", "a.txt", "a")
+	slack := newSlackStub(t, 200)
+	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+
+	if err := os.MkdirAll(filepath.Dir(o.Holiday.Config), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.Holiday.Config, []byte("extra = [\"not-a-date\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatalf("a broken holiday.toml must not block the run: %v", err)
+	}
+	if slack.count() != 2 {
+		t.Fatalf("want 2 slack messages (start + end), got %d", slack.count())
+	}
+	if !strings.Contains(slack.last(), "holiday config error") {
+		t.Errorf("result message should mention the holiday config error, got %q", slack.last())
+	}
+	last, err := ReadRunResult(o.Paths.LastRun())
+	if err != nil || !strings.Contains(last.Warning, "holiday config error") {
+		t.Errorf("last-run.json should keep the warning: %v %+v", err, last.Warning)
+	}
+}
+
+// TestDryRunNeverRefreshesOverNetwork 은 --dry-run 이 저장된 목록이 낡았어도 holiday.Open 만
+// 부르고, 네트워크로 회복을 시도하는 holiday.OpenOrRefresh 는 절대 부르지 않는지 본다.
+// 다른 dry-run 테스트들이 쓰는 setupCommand 의 자리채우기 달력은 항상 테스트 날짜를 덮으므로,
+// 이 보장을 실제로 검증하려면 낡은 달력과 요청을 세는 서버가 따로 필요하다.
+func TestDryRunNeverRefreshesOverNetwork(t *testing.T) {
+	work, _ := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	slack := newSlackStub(t, 200)
+	o, out := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	if err := os.MkdirAll(filepath.Dir(o.Holiday.Config), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.Holiday.Config, []byte("url = \""+srv.URL+"\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// aWeekday 를 덮지 못하는 낡은 목록으로 덮어써, "목록이 멀쩡해서 회복을 안 한다"가 아니라
+	// "dry-run 이라서 애초에 회복을 시도하지 않는다"를 검증한다.
+	if err := holiday.WriteFile(o.Holiday.Calendar(), holiday.File{
+		SyncedAt: "2000-01-01T00:00:00Z",
+		Source:   "https://example.invalid/calendar.ics",
+		Covers:   holiday.Range{From: "2000-01-01", To: "2000-12-31"},
+		Holidays: []holiday.Entry{{Date: "2000-01-01", Name: "placeholder"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	o.DryRun = true
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatal(err)
+	}
+	if hits != 0 {
+		t.Errorf("--dry-run must use holiday.Open (network-free), not OpenOrRefresh; got %d requests", hits)
+	}
+	if !strings.Contains(out.String(), "config OK") {
+		t.Errorf("stdout should still show the dry-run plan:\n%s", out.String())
+	}
+}
+
+// TestDryRunOnDayOffStillShowsPlan 은 쉬는 날에도 --dry-run 이 계획을 생략하지 않고,
+// "건너뛴다"는 안내와 평소의 dry-run 출력을 함께 보여주는지 본다.
+func TestDryRunOnDayOffStillShowsPlan(t *testing.T) {
+	work, _ := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	slack := newSlackStub(t, 200)
+	o, out := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+	o.Now = func() time.Time { return time.Date(2026, 9, 12, 7, 30, 0, 0, time.Local) } // 토요일
+	o.DryRun = true
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "a real run would skip today") {
+		t.Errorf("stdout should note that a real run would skip today:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "config OK") {
+		t.Errorf("stdout should still show the full dry-run plan:\n%s", out.String())
+	}
+	if slack.count() != 0 {
+		t.Errorf("dry-run must not send slack messages, got %d", slack.count())
+	}
+}

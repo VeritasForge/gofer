@@ -75,7 +75,7 @@ func todayLine(hpaths holiday.Paths, now time.Time) string {
 		line = fmt.Sprintf("today:   %s · day off (%s) · not running today\n", now.Format("2006-01-02 (Mon)"), reason)
 	}
 	if warning != "" {
-		line += "         " + warning + "\n"
+		line += "         " + warning + " (실제 run은 이 목록을 갱신한 뒤 다시 판정한다)\n"
 	}
 	return line
 }

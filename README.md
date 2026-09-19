@@ -54,11 +54,11 @@ go build -o bin/gofer .
 
 ```
 gofer ua-refresh config init                                  설정 템플릿 생성 (~/.config/gofer/ua-refresh.toml, 0600)
-gofer ua-refresh run [--dry-run] [--only <레포 디렉토리명>]    본 작업 실행 (터미널이면 TUI—터미널 안에 그려지는 대화형 화면, 아니면 한 줄 로그)
+gofer ua-refresh run [--dry-run] [--only <레포 디렉토리명>] [--force]    본 작업 실행 (터미널이면 TUI—터미널 안에 그려지는 대화형 화면, 아니면 한 줄 로그)
 gofer ua-refresh install | uninstall                           launchd 작업 등록/해제 (macOS 전용)
 gofer ua-refresh status                                        등록 여부·마지막 실행 결과·레포별 그래프 신선도 표시
 gofer ua-refresh log [--follow]                                 오늘 로그 출력
-gofer holiday sync                                             공휴일 달력을 내려받아 로컬에 저장 (연 1회 정도)
+gofer holiday sync [--init-config]                             공휴일 달력을 내려받아 로컬에 저장 (연 1회 정도), --init-config 는 설정 템플릿만 생성
 gofer holiday list [연도]                                       저장된 공휴일 목록 출력
 gofer holiday check [YYYY-MM-DD]                                그날이 쉬는 날인지 확인 (생략 시 오늘)
 ```
@@ -132,7 +132,9 @@ trunk = "develop"
 |---|---|---|
 | `run` | `--dry-run` | git과 claude를 건드리지 않고 설정 검증과 예상 동작만 출력한다 |
 | `run` | `--only <레포 디렉토리명>` | 설정된 레포 중 이름이 일치하는 하나만 처리한다 |
+| `run` | `--force` | 오늘이 쉬는 날(주말·공휴일)이어도 무시하고 실행한다 |
 | `log` | `-f`, `--follow` | 오늘 로그를 계속 따라가며 출력한다(Ctrl+C로 중단) |
+| `holiday sync` | `--init-config` | 공휴일 달력을 내려받는 대신 `~/.config/gofer/holiday.toml` 설정 템플릿만 생성한다 |
 
 ## Exit Status
 

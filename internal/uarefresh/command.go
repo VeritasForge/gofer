@@ -160,7 +160,10 @@ func holidayGate(ctx context.Context, o CommandOptions, cfg *Config, now time.Ti
 		cal, warning, err = holiday.OpenOrRefresh(ctx, o.Holiday, now)
 	}
 	if err != nil {
-		return "", "", err
+		// holiday.toml 자체가 잘못 적혀 있어도 하드 오류로 실행을 막지 않는다 —
+		// 그러면 Slack 알림조차 못 보내고 조용히 아무 일도 하지 않게 된다.
+		// 판정 없이 진행하고, 문제는 경고로 알린다.
+		return "", fmt.Sprintf("holiday config error (%v) — running as usual", err), nil
 	}
 	reason, _ = cal.Holiday(now)
 	return reason, warning, nil

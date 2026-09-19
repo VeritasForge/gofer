@@ -64,6 +64,29 @@ func TestParseICSDropsObservances(t *testing.T) {
 	}
 }
 
+// TestExpandBoundsRunawayRange 는 깨졌거나 악의적인 항목(예: DTSTART 0001-01-01,
+// DTEND 9999-12-31)이 날짜 범위를 극단으로 벌려도 메모리를 소진하지 않는지 본다.
+// 정상적인 여러 날짜짜리 항목(설날 연휴 표본)은 그대로 펼쳐져야 한다.
+func TestExpandBoundsRunawayRange(t *testing.T) {
+	if got := expand("00010101", "99991231", "폭주"); got != nil {
+		t.Errorf("a runaway date range should expand to nothing, got %d entries", len(got))
+	}
+	got := expand("20260216", "20260219", "설날 연휴")
+	want := []Entry{
+		{Date: "2026-02-16", Name: "설날 연휴"},
+		{Date: "2026-02-17", Name: "설날 연휴"},
+		{Date: "2026-02-18", Name: "설날 연휴"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d entries, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("entry %d: got %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
 func TestFetchAndSync(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(sampleICS))

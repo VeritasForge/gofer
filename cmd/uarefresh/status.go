@@ -2,9 +2,11 @@ package uarefresh
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	hol "gofer/internal/holiday"
 	ua "gofer/internal/uarefresh"
 )
 
@@ -25,7 +27,11 @@ func statusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprint(cmd.OutOrStdout(), ua.StatusText(cmd.Context(), paths, cfg, installed))
+			hpaths, err := hol.DefaultPaths()
+			if err != nil {
+				return err
+			}
+			fmt.Fprint(cmd.OutOrStdout(), ua.StatusText(cmd.Context(), paths, hpaths, cfg, installed, time.Now()))
 			return nil
 		},
 	}

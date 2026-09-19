@@ -262,11 +262,12 @@ func (c *Calendar) Holiday(t time.Time) (reason string, off bool)
 
 ## 6. 화면과 로그
 
+사용자에게 보이는 문구는 기존 `ua-refresh` 출력과 같이 영어로 쓰고, 달력에서 읽어 온 휴일 이름만 한국어 그대로 둔다.
+
 ```
 $ gofer holiday sync
-내려받는 중: 대한민국의 휴일
-2021~2031년 · 공휴일 205건 저장
-저장 위치: ~/Library/Application Support/gofer/holiday/calendar.json
+2021-01-01 ~ 2031-12-31 · 205 holidays stored
+  ~/Library/Application Support/gofer/holiday/calendar.json
 
 $ gofer holiday list 2026
 2026-01-01  새해첫날
@@ -275,14 +276,14 @@ $ gofer holiday list 2026
 …
 
 $ gofer holiday check 2026-03-02
-2026-03-02 (월) · 휴일 — 쉬는 날 삼일절
+2026-03-02 (Mon)  holiday — 쉬는 날 삼일절
 
 $ gofer ua-refresh run
-2026-03-02 (월) · 휴일 — 쉬는 날 삼일절 · 건너뜁니다 (--force 로 무시)
+2026-03-02 (Mon) is a day off (쉬는 날 삼일절) — skipping. Use --force to run anyway.
 
 $ gofer ua-refresh status
 launchd: installed · daily at 07:30 · workdays only · ~/Library/LaunchAgents/…
-today:   2026-03-02 (월) · 휴일 — 쉬는 날 삼일절 · 오늘은 실행하지 않습니다
+today:   2026-03-02 (Mon) · day off (쉬는 날 삼일절) · not running today
 last run: 2026-02-27 07:30 → 07:41 · 3 updated · …
 repos:
   …

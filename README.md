@@ -58,6 +58,9 @@ gofer ua-refresh run [--dry-run] [--only <레포 디렉토리명>]    본 작업
 gofer ua-refresh install | uninstall                           launchd 작업 등록/해제 (macOS 전용)
 gofer ua-refresh status                                        등록 여부·마지막 실행 결과·레포별 그래프 신선도 표시
 gofer ua-refresh log [--follow]                                 오늘 로그 출력
+gofer holiday sync                                             공휴일 달력을 내려받아 로컬에 저장 (연 1회 정도)
+gofer holiday list [연도]                                       저장된 공휴일 목록 출력
+gofer holiday check [YYYY-MM-DD]                                그날이 쉬는 날인지 확인 (생략 시 오늘)
 ```
 
 ### 첫 실행 예시
@@ -112,6 +115,16 @@ trunk = "develop"
 | `env.extra_path` | launchd는 `PATH`가 거의 비어 있어 `claude`·`node`·`pnpm` 등을 직접 찾도록 앞에 붙여주는 경로 목록. `*` 글롭은 이름순 정렬 후 마지막 항목만 쓴다 |
 | `repos[].path` | 대상 레포의 루트 작업 트리 경로. 이 경로는 항상 trunk 브랜치에 있어야 한다(기능 작업은 별도 git worktree에서 한다) |
 | `repos[].trunk` | 그 레포의 통합 브랜치 이름(`main`, `develop` 등 — 레포마다 다를 수 있어 자동 추론하지 않고 명시한다) |
+
+### 쉬는 날에는 실행하지 않기
+
+`ua-refresh`는 기본적으로 토요일·일요일·공휴일·대체공휴일에 실행되지 않고, 그런 날에는 Slack 알림도 보내지 않는다. 주말은 별도 준비 없이 판정되지만 공휴일은 목록이 있어야 하므로, 설치 후 `gofer holiday sync`를 한 번 실행해 달력을 내려받아 둔다.
+
+목록이 오늘을 덮지 못하면 `ua-refresh`가 그때 한 번 스스로 내려받아 회복하므로, `sync`를 주기적으로 돌릴 필요는 없다(내려받은 달력은 여러 해치를 한꺼번에 담는다). 회복까지 실패한 경우에만 주말만 걸러 내고, 그 사실을 그날 결과 알림 맨 아래에 한 줄로 알린다.
+
+쉬는 날에도 실행하려면 `~/.config/gofer/ua-refresh.toml`의 `[schedule]`에서 `workdays_only = false`로 두거나, 한 번만 무시할 때는 `gofer ua-refresh run --force`를 쓴다.
+
+공휴일 판정을 손보려면 `~/.config/gofer/holiday.toml`을 만든다(`gofer holiday sync --init-config`가 템플릿을 만들어 준다). `extra`에 적은 날짜는 쉬는 날로 더해지고, `ignore`에 적은 날짜는 쉬는 날에서 빠진다. 이 파일은 `sync`가 건드리지 않으므로 직접 적은 내용이 사라지지 않는다.
 
 ## Options
 

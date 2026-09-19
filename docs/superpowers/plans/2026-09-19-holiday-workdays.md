@@ -62,7 +62,9 @@ git diff 4a7f9f2 --stat -- go.mod go.sum   # 출력이 비어 있다 (의존성�
 | `cmd/holiday/holiday.go` `sync.go` `list.go` `check.go` | 플래그 파싱과 출력 | 4 |
 | `cmd/root.go` | `holiday` 도구 등록 (한 줄 추가) | 4 |
 | `internal/uarefresh/config.go` | `workdays_only` 설정 항목 | 5 |
-| `internal/uarefresh/command.go` | 실행 전 쉬는 날 게이트 | 6 |
+| `internal/uarefresh/command.go` | 실행 전 쉬는 날 게이트, 목록이 낡았을 때의 회복 호출 | 6 |
+| `internal/uarefresh/result.go` | 회복 실패 경고를 결과에 싣는 필드 | 6 |
+| `internal/uarefresh/report.go` | 그 경고를 Slack 본문 끝에 한 줄로 | 6 |
 | `cmd/uarefresh/run.go` | `--force` 플래그 | 6 |
 | `internal/uarefresh/status.go` | 오늘 판정 표시 | 7 |
 | `cmd/uarefresh/status.go` | 달력 경로 전달 | 7 |
@@ -664,6 +666,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `func ParseICS(body []byte) []Entry` — 날짜순 정렬
   - `func Fetch(ctx context.Context, url string) ([]Entry, error)`
   - `func Sync(ctx context.Context, p Paths, now time.Time) (File, error)`
+  - `func OpenOrRefresh(ctx context.Context, p Paths, now time.Time) (*Calendar, string, error)`
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -797,6 +800,80 @@ func TestSyncKeepsOldListWhenFetchFails(t *testing.T) {
 	kept, err := ReadFile(p.Calendar())
 	if err != nil || len(kept.Holidays) != 3 {
 		t.Errorf("the old list must stay intact: %v %+v", err, kept)
+	}
+}
+
+// TestOpenOrRefreshRecoversStaleList 는 저장된 목록이 오늘을 덮지 못할 때 스스로 받아
+// 회복하는지 본다. 사람이 sync 를 잊어도 공휴일 판정이 조용히 멎지 않아야 한다.
+func TestOpenOrRefreshRecoversStaleList(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.Write([]byte(sampleICS))
+	}))
+	defer srv.Close()
+
+	p := newPaths(t, "url = \""+srv.URL+"\"\n")
+	stale := storeSample
+	stale.Covers = Range{From: "2020-01-01", To: "2020-12-31"} // 오늘을 못 덮는 낡은 목록
+	if err := WriteFile(p.Calendar(), stale); err != nil {
+		t.Fatal(err)
+	}
+	cal, warning, err := OpenOrRefresh(t.Context(), p, day(t, "2026-03-03"))
+	if err != nil {
+		t.Fatalf("OpenOrRefresh: %v", err)
+	}
+	if warning != "" {
+		t.Errorf("a successful refresh should leave no warning, got %q", warning)
+	}
+	if hits != 1 {
+		t.Errorf("should download exactly once, got %d", hits)
+	}
+	if reason, off := cal.Holiday(day(t, "2026-03-01")); !off || reason != "삼일절" {
+		t.Errorf("refreshed list should be in use: got (%q, %v)", reason, off)
+	}
+}
+
+// TestOpenOrRefreshSkipsNetworkWhenFresh 는 목록이 멀쩡하면 네트워크를 아예 쓰지 않는지 본다.
+// 매일 아침 돌아가는 경로에 외부 서버 접속을 넣지 않는다는 것이 이 설계의 핵심이다.
+func TestOpenOrRefreshSkipsNetworkWhenFresh(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.Write([]byte(sampleICS))
+	}))
+	defer srv.Close()
+
+	p := newPaths(t, "url = \""+srv.URL+"\"\n")
+	if err := WriteFile(p.Calendar(), storeSample); err != nil {
+		t.Fatal(err)
+	}
+	if _, warning, err := OpenOrRefresh(t.Context(), p, day(t, "2026-03-03")); err != nil || warning != "" {
+		t.Fatalf("OpenOrRefresh: %v %q", err, warning)
+	}
+	if hits != 0 {
+		t.Errorf("a fresh list must not touch the network, got %d requests", hits)
+	}
+}
+
+// TestOpenOrRefreshWarnsWhenRecoveryFails 는 회복까지 실패하면 경고가 남고, 그래도
+// 주말 판정은 살아 있는지 본다.
+func TestOpenOrRefreshWarnsWhenRecoveryFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	p := newPaths(t, "url = \""+srv.URL+"\"\n")
+	cal, warning, err := OpenOrRefresh(t.Context(), p, day(t, "2026-03-02"))
+	if err != nil {
+		t.Fatalf("a failed recovery must not block the run: %v", err)
+	}
+	if !strings.Contains(warning, "gofer holiday sync") {
+		t.Errorf("warning should point at sync, got %q", warning)
+	}
+	if cal.IsWorkday(day(t, "2026-03-14")) {
+		t.Error("saturday is still a day off")
 	}
 }
 ```
@@ -943,18 +1020,35 @@ func Sync(ctx context.Context, p Paths, now time.Time) (File, error) {
 	}
 	return f, WriteFile(p.Calendar(), f)
 }
+
+// OpenOrRefresh 는 Open 과 같되, 저장된 목록이 now 를 덮지 못하는 바로 그때만
+// 한 번 내려받아 본다. 목록이 멀쩡한 동안에는 네트워크를 전혀 쓰지 않는다 —
+// 매일 아침 돌아가는 경로에 외부 서버 접속을 두지 않는 것이 이 설계의 핵심이다.
+//
+// 사람이 sync 를 잊으면 공휴일 판정이 조용히 멎기 때문에 이 회복 경로를 둔다.
+// 회복까지 실패해도 그날 실행을 막지 않고, 주말만 판정한 채 경고를 돌려준다.
+func OpenOrRefresh(ctx context.Context, p Paths, now time.Time) (*Calendar, string, error) {
+	cal, warning, err := Open(p, now)
+	if err != nil || warning == "" {
+		return cal, warning, err
+	}
+	if _, serr := Sync(ctx, p, now); serr != nil {
+		return cal, fmt.Sprintf("%s (auto refresh failed: %v)", warning, serr), nil
+	}
+	return Open(p, now)
+}
 ```
 
 - [ ] **Step 4: 테스트가 통과하는지 확인**
 
 Run: `go test ./internal/holiday/ -v`
-Expected: PASS — 전부 통과
+Expected: PASS — 전부 통과. 특히 `TestOpenOrRefreshSkipsNetworkWhenFresh`가 요청 건수 0을 확인한다
 
 - [ ] **Step 5: 커밋**
 
 ```bash
 git add internal/holiday/ics.go internal/holiday/ics_test.go
-git commit -m "feat(holiday): download and parse the public holiday calendar
+git commit -m "feat(holiday): download, parse, and refresh a stale list once
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -1332,15 +1426,18 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 6: 쉬는 날 게이트와 `--force`
 
 **Files:**
-- Modify: `internal/uarefresh/command.go` (`CommandOptions`에 두 필드, `RunCommand`에 게이트, `dryRun`에 한 줄, 새 함수 `holidayGate`)
+- Modify: `internal/uarefresh/command.go` (`CommandOptions`에 두 필드, `RunCommand`에 게이트, 새 함수 `holidayGate`)
+- Modify: `internal/uarefresh/result.go` (`RunResult`에 `Warning` 필드)
+- Modify: `internal/uarefresh/report.go` (`SlackText` 끝에 경고 한 줄)
 - Modify: `cmd/uarefresh/run.go` (`--force` 플래그와 달력 경로 전달)
-- Test: `internal/uarefresh/command_test.go` (테스트 세 개 추가)
+- Test: `internal/uarefresh/command_test.go` (테스트 네 개 추가)
 
 **Interfaces:**
-- Consumes: Task 2의 `holiday.Paths`·`holiday.Open`, Task 5의 `cfg.Schedule.WorkdaysOnly`
+- Consumes: Task 2의 `holiday.Paths`·`holiday.Open`, Task 3의 `holiday.OpenOrRefresh`, Task 5의 `cfg.Schedule.WorkdaysOnly`
 - Produces:
   - `CommandOptions.Force bool`, `CommandOptions.Holiday holiday.Paths`
-  - `func holidayGate(o CommandOptions, cfg *Config, now time.Time) (reason, warning string, err error)`
+  - `RunResult.Warning string` (`json:"warning,omitempty"`)
+  - `func holidayGate(ctx context.Context, o CommandOptions, cfg *Config, now time.Time) (reason, warning string, err error)`
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -1410,6 +1507,40 @@ func TestRunCommandForceOverridesHoliday(t *testing.T) {
 		t.Errorf("--force should run normally, got %d messages", slack.count())
 	}
 }
+
+// TestRunCommandPutsHolidayWarningInSlack 은 목록을 회복하지 못했을 때 그 사실이 결과
+// 알림에 실리는지 본다. 표준 출력으로만 내보내면 launchd.log 에 쌓이고 아무도 보지 않는다.
+// 설정의 url 이 닿지 않는 주소이므로 자동 회복도 실패한다.
+func TestRunCommandPutsHolidayWarningInSlack(t *testing.T) {
+	work, origin := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	pushFromClone(t, origin, "main", "a.txt", "a")
+	slack := newSlackStub(t, 200)
+	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+	o.Now = func() time.Time { return time.Date(2026, 9, 11, 7, 30, 0, 0, time.Local) } // 금요일
+
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer dead.Close()
+	if err := os.MkdirAll(filepath.Dir(o.Holiday.Config), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.Holiday.Config, []byte("url = \""+dead.URL+"\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatalf("a failed recovery must not block the run: %v", err)
+	}
+	if !strings.Contains(slack.last(), "gofer holiday sync") {
+		t.Errorf("the result message should carry the warning, got:\n%s", slack.last())
+	}
+	last, err := ReadRunResult(o.Paths.LastRun())
+	if err != nil || !strings.Contains(last.Warning, "gofer holiday sync") {
+		t.Errorf("last-run.json should keep the warning: %v %+v", err, last.Warning)
+	}
+}
 ```
 
 `setupCommand`가 `CommandOptions`에 `Holiday`를 채우도록 같은 파일의 헬퍼를 고친다. `paths` 블록 다음에 한 줄을 더하고, 마지막 반환문을 바꾼다.
@@ -1452,12 +1583,21 @@ type CommandOptions struct {
 ```go
 // holidayGate 는 오늘이 쉬는 날인지 본다. 건너뛸 사유와 사람이 볼 경고를 돌려주고,
 // 일하는 날이면 사유가 빈 문자열이다. workdays_only 가 꺼져 있거나 --force 면 판정하지 않는다.
-// 목록이 없거나 낡아도 오류를 내지 않는다 — 판정할 수 없다고 실행을 막으면 그래프가 조용히 늙는다.
-func holidayGate(o CommandOptions, cfg *Config, now time.Time) (reason, warning string, err error) {
+//
+// 저장된 목록이 오늘을 덮지 못하면 그때만 한 번 내려받아 회복한다 — 사람이 sync 를 잊어도
+// 공휴일 판정이 조용히 멎지 않게 하기 위해서다. 회복이 실패해도 오류를 내지 않는다.
+// 판정할 수 없다고 실행을 막으면 그래프가 조용히 늙기 때문이다.
+// --dry-run 은 아무것도 바꾸지 않아야 하므로 회복을 시도하지 않는다.
+func holidayGate(ctx context.Context, o CommandOptions, cfg *Config, now time.Time) (reason, warning string, err error) {
 	if !cfg.Schedule.WorkdaysOnly || o.Force {
 		return "", "", nil
 	}
-	cal, warning, err := holiday.Open(o.Holiday, now)
+	var cal *holiday.Calendar
+	if o.DryRun {
+		cal, warning, err = holiday.Open(o.Holiday, now)
+	} else {
+		cal, warning, err = holiday.OpenOrRefresh(ctx, o.Holiday, now)
+	}
 	if err != nil {
 		return "", "", err
 	}
@@ -1469,12 +1609,12 @@ func holidayGate(o CommandOptions, cfg *Config, now time.Time) (reason, warning 
 `RunCommand` 안에서 `selectRepos` 다음, `if o.DryRun` 앞에 게이트를 넣는다.
 
 ```go
-	reason, warning, err := holidayGate(o, cfg, now())
+	reason, holidayWarning, err := holidayGate(ctx, o, cfg, now())
 	if err != nil {
 		return err
 	}
-	if warning != "" {
-		fmt.Fprintln(o.Stdout, "warning: "+warning)
+	if holidayWarning != "" {
+		fmt.Fprintln(o.Stdout, "warning: "+holidayWarning)
 	}
 	if o.DryRun {
 		if reason != "" {
@@ -1489,6 +1629,32 @@ func holidayGate(o CommandOptions, cfg *Config, now time.Time) (reason, warning 
 ```
 
 기존의 `if o.DryRun { return dryRun(...) }` 블록은 위 코드가 대신하므로 지운다.
+
+같은 함수에서 결과를 받은 뒤, `res.LogPath = logPath` 다음 줄에 경고를 싣는다. 이래야 알림과 `last-run.json` 양쪽에 남는다.
+
+```go
+	res.Warning = holidayWarning
+```
+
+`internal/uarefresh/result.go`의 `RunResult`에 필드를 더한다.
+
+```go
+type RunResult struct {
+	StartedAt  time.Time    `json:"started_at"`
+	FinishedAt time.Time    `json:"finished_at"`
+	Repos      []RepoResult `json:"repos"`
+	LogPath    string       `json:"log_path"`
+	Warning    string       `json:"warning,omitempty"` // 공휴일 목록을 회복하지 못했을 때만 채워진다
+}
+```
+
+`internal/uarefresh/report.go`의 `SlackText` 마지막 `fmt.Fprintf(&b, "로그: %s", shortenHome(r.LogPath))` 다음에 세 줄을 더한다.
+
+```go
+	if r.Warning != "" {
+		fmt.Fprintf(&b, "\n⚠️ %s", r.Warning)
+	}
+```
 
 `cmd/uarefresh/run.go`를 고친다. import에 `hol "gofer/internal/holiday"`를 더하고, `var dryRun bool` 옆에 `var force bool`을 둔다. `RunE` 안을 다음으로 바꾼다.
 
@@ -1521,13 +1687,14 @@ Expected: PASS — 새 테스트 세 개를 포함해 전부 통과
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add internal/uarefresh/command.go internal/uarefresh/command_test.go cmd/uarefresh/run.go
+git add internal/uarefresh/command.go internal/uarefresh/command_test.go \
+        internal/uarefresh/result.go internal/uarefresh/report.go cmd/uarefresh/run.go
 git commit -m "feat(ua-refresh): skip weekends and holidays, --force to override
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
 
-**Task 6 완료조건:** `go test ./internal/uarefresh/ -v`가 PASS. 특히 토요일 테스트에서 Slack 건수가 0이고 `last-run.json`·일별 로그·잠금 파일이 모두 만들어지지 않는다.
+**Task 6 완료조건:** `go test ./internal/uarefresh/ -v`가 PASS. 특히 (1) 토요일 테스트에서 Slack 건수가 0이고 `last-run.json`·일별 로그·잠금 파일이 모두 만들어지지 않으며, (2) 회복 실패 테스트에서 경고가 Slack 본문과 `last-run.json`에 모두 들어간다.
 
 ---
 
@@ -1682,7 +1849,9 @@ gofer holiday check [YYYY-MM-DD]                                그날이 쉬는
 ```markdown
 ### 쉬는 날에는 실행하지 않기
 
-`ua-refresh`는 기본적으로 토요일·일요일·공휴일·대체공휴일에 실행되지 않고, 그런 날에는 Slack 알림도 보내지 않는다. 주말은 별도 준비 없이 판정되지만 공휴일은 목록이 있어야 하므로, 설치 후 `gofer holiday sync`를 한 번 실행해 달력을 내려받아 둔다. 목록이 없으면 주말만 걸러 내고 그 사실을 경고로 알린다.
+`ua-refresh`는 기본적으로 토요일·일요일·공휴일·대체공휴일에 실행되지 않고, 그런 날에는 Slack 알림도 보내지 않는다. 주말은 별도 준비 없이 판정되지만 공휴일은 목록이 있어야 하므로, 설치 후 `gofer holiday sync`를 한 번 실행해 달력을 내려받아 둔다.
+
+목록이 오늘을 덮지 못하면 `ua-refresh`가 그때 한 번 스스로 내려받아 회복하므로, `sync`를 주기적으로 돌릴 필요는 없다(내려받은 달력은 여러 해치를 한꺼번에 담는다). 회복까지 실패한 경우에만 주말만 걸러 내고, 그 사실을 그날 결과 알림 맨 아래에 한 줄로 알린다.
 
 쉬는 날에도 실행하려면 `~/.config/gofer/ua-refresh.toml`의 `[schedule]`에서 `workdays_only = false`로 두거나, 한 번만 무시할 때는 `gofer ua-refresh run --force`를 쓴다.
 
@@ -1757,6 +1926,10 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 | 설정 오류만 오류, 나머지는 경고 | 2 |
 | 달력 내려받기, CRLF·접힌 줄·배타적 끝 날짜 | 3 |
 | 공휴일 0건이면 저장하지 않음 | 3 |
+| 목록이 오늘을 못 덮을 때만 스스로 한 번 회복 | 3(`OpenOrRefresh`), 6(호출) |
+| 목록이 멀쩡하면 네트워크를 쓰지 않음 | 3(요청 건수 0을 시험으로 고정) |
+| `--dry-run`은 회복하지 않음 | 6 |
+| 회복 실패 경고를 Slack 알림과 `last-run.json`에 실음 | 6 |
 | 달력 주소를 설정으로 뺌 | 2(설정), 3(사용) |
 | `sync`·`list`·`check` 명령 | 4 |
 | `workdays_only` 기본값 켜짐 | 5 |
@@ -1766,6 +1939,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 | `status`의 오늘 판정 줄 | 7 |
 | 시험 방법(네트워크 없이) | 1·2·3·6·7 |
 
-**이름 일관성**: `Entry`·`Calendar`·`New`·`Holiday`·`IsWorkday`·`Covers`·`Paths`·`Config`·`File`·`Range`·`LoadConfig`·`ReadFile`·`WriteFile`·`Open`·`ParseICS`·`Fetch`·`Sync`·`holidayGate`·`todayLine`·`StatusText`가 정의된 곳과 쓰이는 곳에서 같은 철자다. `dateLayout`은 Task 1에서 정의하고 2·3이 쓴다.
+**이름 일관성**: `Entry`·`Calendar`·`New`·`Holiday`·`IsWorkday`·`Covers`·`Paths`·`Config`·`File`·`Range`·`LoadConfig`·`ReadFile`·`WriteFile`·`Open`·`OpenOrRefresh`·`ParseICS`·`Fetch`·`Sync`·`holidayGate`·`todayLine`·`StatusText`가 정의된 곳과 쓰이는 곳에서 같은 철자다. `dateLayout`은 Task 1에서 정의하고 2·3이 쓴다. `RunResult.Warning`은 Task 6에서 정의하고 같은 Task의 `SlackText`가 읽는다.
+
+**`status`는 자동 회복을 하지 않는다**: Task 7의 `todayLine`은 `Open`을 쓴다. 상태를 보여주는 명령이 파일을 바꾸면 놀랍기 때문이며, `--dry-run`과 같은 이유다. 아침 실행(Task 6)만 회복한다.
 
 **스펙에 있으나 플랜에서 형태가 바뀐 것**: 스펙 3절은 설정 템플릿을 `~/.config/gofer/holiday.toml`로만 적고 만드는 방법을 정하지 않았다. 플랜은 `gofer holiday sync --init-config`로 템플릿을 만들게 했다. 설정 파일이 없어도 모든 기능이 동작하므로 이 명령은 편의 수단이다.

@@ -11,18 +11,21 @@ import (
 	"sync"
 	"time"
 
+	"gofer/internal/holiday"
 	"gofer/internal/slack"
 	"gofer/internal/tui"
 )
 
 // CommandOptions 는 `gofer ua-refresh run` 한 번의 입력이다.
 type CommandOptions struct {
-	Paths  Paths
-	DryRun bool
-	Only   string
-	Stdout io.Writer
-	TTY    bool
-	Now    func() time.Time
+	Paths   Paths
+	Holiday holiday.Paths
+	DryRun  bool
+	Force   bool
+	Only    string
+	Stdout  io.Writer
+	TTY     bool
+	Now     func() time.Time
 }
 
 // ErrIncomplete 는 skipped 나 failed 가 있어 종료 코드 1 이어야 할 때다 (설계 4절).
@@ -42,8 +45,22 @@ func RunCommand(ctx context.Context, o CommandOptions) error {
 	if err != nil {
 		return err
 	}
+	reason, holidayWarning, err := holidayGate(ctx, o, cfg, now())
+	if err != nil {
+		return err
+	}
+	if holidayWarning != "" {
+		fmt.Fprintln(o.Stdout, "warning: "+holidayWarning)
+	}
 	if o.DryRun {
+		if reason != "" {
+			fmt.Fprintf(o.Stdout, "%s is a day off (%s) — a real run would skip today\n", now().Format("2006-01-02 (Mon)"), reason)
+		}
 		return dryRun(ctx, o.Stdout, cfg, repos)
+	}
+	if reason != "" {
+		fmt.Fprintf(o.Stdout, "%s is a day off (%s) — skipping. Use --force to run anyway.\n", now().Format("2006-01-02 (Mon)"), reason)
+		return nil
 	}
 
 	release, err := AcquireLock(o.Paths.Lock())
@@ -91,6 +108,7 @@ func RunCommand(ctx context.Context, o CommandOptions) error {
 	}
 	res := <-resultCh
 	res.LogPath = logPath
+	res.Warning = holidayWarning
 
 	if err := WriteRunResult(o.Paths.LastRun(), res); err != nil {
 		fmt.Fprintf(logw, "write last-run.json: %v\n", err)
@@ -122,6 +140,30 @@ func selectRepos(all []RepoConfig, only string) ([]RepoConfig, error) {
 		}
 	}
 	return nil, fmt.Errorf("no repo named %q in config", only)
+}
+
+// holidayGate 는 오늘이 쉬는 날인지 본다. 건너뛸 사유와 사람이 볼 경고를 돌려주고,
+// 일하는 날이면 사유가 빈 문자열이다. workdays_only 가 꺼져 있거나 --force 면 판정하지 않는다.
+//
+// 저장된 목록이 오늘을 덮지 못하면 그때만 한 번 내려받아 회복한다 — 사람이 sync 를 잊어도
+// 공휴일 판정이 조용히 멎지 않게 하기 위해서다. 회복이 실패해도 오류를 내지 않는다.
+// 판정할 수 없다고 실행을 막으면 그래프가 조용히 늙기 때문이다.
+// --dry-run 은 아무것도 바꾸지 않아야 하므로 회복을 시도하지 않는다.
+func holidayGate(ctx context.Context, o CommandOptions, cfg *Config, now time.Time) (reason, warning string, err error) {
+	if !cfg.Schedule.WorkdaysOnly || o.Force {
+		return "", "", nil
+	}
+	var cal *holiday.Calendar
+	if o.DryRun {
+		cal, warning, err = holiday.Open(o.Holiday, now)
+	} else {
+		cal, warning, err = holiday.OpenOrRefresh(ctx, o.Holiday, now)
+	}
+	if err != nil {
+		return "", "", err
+	}
+	reason, _ = cal.Holiday(now)
+	return reason, warning, nil
 }
 
 // dryRun 은 git 과 Claude 를 건드리지 않고 설정·가드·그래프 상태만 보고 무엇을 할지 출력한다 (설계 4절).

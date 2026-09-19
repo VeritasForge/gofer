@@ -31,6 +31,9 @@ func SlackText(r RunResult) string {
 		fmt.Fprintf(&b, "%s %-*s  %-*s  %s\n", statusSymbol(rr.Status), nw, rr.Name, tw, rr.Trunk, repoLine(rr))
 	}
 	fmt.Fprintf(&b, "로그: %s", shortenHome(r.LogPath))
+	if r.Warning != "" {
+		fmt.Fprintf(&b, "\n⚠️ %s", r.Warning)
+	}
 	return b.String()
 }
 

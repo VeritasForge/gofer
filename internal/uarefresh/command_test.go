@@ -16,7 +16,14 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"gofer/internal/holiday"
 )
+
+// aWeekday 는 테스트 기본값으로 쓰는, 실행 시점의 실제 요일과 무관한 고정된 평일이다.
+// workdays_only 가 기본으로 켜지면서, o.Now 를 실제 벽시계에 맡기면 테스트를 우연히
+// 토·일에 돌릴 때 기존 테스트가 전부 "쉬는 날"로 건너뛰어져 깨진다.
+var aWeekday = time.Date(2026, 9, 9, 7, 30, 0, 0, time.Local)
 
 // slackStub 은 받은 DM 본문을 모으는 가짜 웹훅이다.
 type slackStub struct {
@@ -60,6 +67,18 @@ func setupCommand(t *testing.T, f fakeClaude, webhook string, repos ...RepoConfi
 		StateDir: filepath.Join(base, "state"),
 		Plist:    filepath.Join(base, "gofer.ua-refresh.plist"),
 	}
+	hpaths := holiday.Paths{
+		Config:   filepath.Join(base, "config", "holiday.toml"),
+		StateDir: filepath.Join(base, "state", "holiday"),
+	}
+	if err := holiday.WriteFile(hpaths.Calendar(), holiday.File{
+		SyncedAt: aWeekday.Format(time.RFC3339),
+		Source:   "https://example.invalid/calendar.ics",
+		Covers:   holiday.Range{From: "2000-01-01", To: "2100-12-31"},
+		Holidays: []holiday.Entry{{Date: "2000-01-01", Name: "placeholder"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "[schedule]\nat = \"07:30\"\n[claude]\nbudget_usd = 5\ntimeout_min = 1\n[notify.slack]\nwebhook_url = %q\n[env]\nextra_path = [%q]\n", webhook, f.Dir)
 	for _, r := range repos {
@@ -70,7 +89,7 @@ func setupCommand(t *testing.T, f fakeClaude, webhook string, repos ...RepoConfi
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	return CommandOptions{Paths: paths, Stdout: &out, TTY: false}, &out
+	return CommandOptions{Paths: paths, Holiday: hpaths, Stdout: &out, TTY: false, Now: func() time.Time { return aWeekday }}, &out
 }
 
 func TestRunCommandEndToEnd(t *testing.T) {
@@ -307,5 +326,113 @@ func TestRunCommandRefusesWhenLocked(t *testing.T) {
 	defer release()
 	if err := RunCommand(t.Context(), o); !errors.Is(err, ErrAlreadyRunning) {
 		t.Fatalf("want ErrAlreadyRunning, got %v", err)
+	}
+}
+
+// TestRunCommandSkipsOnWeekend 는 토요일에 아무것도 하지 않고 끝나는지 본다. Slack 을 보내지
+// 않는 것이 이 기능의 목적이고, 잠금·로그 파일·last-run.json 도 건드리지 않아야 한다.
+// setupCommand 가 만드는 설정에는 workdays_only 가 없다 — 없어도 켜진 것으로 읽혀야 한다.
+func TestRunCommandSkipsOnWeekend(t *testing.T) {
+	work, _ := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	slack := newSlackStub(t, 200)
+	o, out := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+	o.Now = func() time.Time { return time.Date(2026, 9, 12, 7, 30, 0, 0, time.Local) } // 토요일
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatalf("a skipped day must exit cleanly: %v", err)
+	}
+	if slack.count() != 0 {
+		t.Errorf("no Slack message should go out, got %d", slack.count())
+	}
+	if !strings.Contains(out.String(), "skipping") || !strings.Contains(out.String(), "주말") {
+		t.Errorf("stdout should say why it skipped:\n%s", out.String())
+	}
+	if _, err := os.Stat(o.Paths.LastRun()); !errors.Is(err, os.ErrNotExist) {
+		t.Error("last-run.json must not be touched on a day off")
+	}
+	if _, err := os.Stat(o.Paths.DailyLog(o.Now())); !errors.Is(err, os.ErrNotExist) {
+		t.Error("no daily log file should be created on a day off")
+	}
+	if _, err := os.Stat(o.Paths.Lock()); !errors.Is(err, os.ErrNotExist) {
+		t.Error("no lock file should be left behind")
+	}
+}
+
+func TestRunCommandRunsOnWorkday(t *testing.T) {
+	work, origin := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	pushFromClone(t, origin, "main", "a.txt", "a")
+	slack := newSlackStub(t, 200)
+	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+	o.Now = func() time.Time { return time.Date(2026, 9, 11, 7, 30, 0, 0, time.Local) } // 금요일
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatalf("RunCommand: %v", err)
+	}
+	if slack.count() != 2 {
+		t.Errorf("a workday sends start and result messages, got %d", slack.count())
+	}
+}
+
+// TestRunCommandForceOverridesHoliday 는 --force 가 토요일 판정을 무시하는지 본다.
+func TestRunCommandForceOverridesHoliday(t *testing.T) {
+	work, origin := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	pushFromClone(t, origin, "main", "a.txt", "a")
+	slack := newSlackStub(t, 200)
+	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+	o.Now = func() time.Time { return time.Date(2026, 9, 12, 7, 30, 0, 0, time.Local) } // 토요일
+	o.Force = true
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatalf("RunCommand: %v", err)
+	}
+	if slack.count() != 2 {
+		t.Errorf("--force should run normally, got %d messages", slack.count())
+	}
+}
+
+// TestRunCommandPutsHolidayWarningInSlack 은 목록을 회복하지 못했을 때 그 사실이 결과
+// 알림에 실리는지 본다. 표준 출력으로만 내보내면 launchd.log 에 쌓이고 아무도 보지 않는다.
+// 설정의 url 이 닿지 않는 주소이므로 자동 회복도 실패한다.
+func TestRunCommandPutsHolidayWarningInSlack(t *testing.T) {
+	work, origin := newRepoWithOrigin(t, "main")
+	f := installFakeClaude(t, "ok")
+	pushFromClone(t, origin, "main", "a.txt", "a")
+	slack := newSlackStub(t, 200)
+	o, _ := setupCommand(t, f, slack.srv.URL, RepoConfig{Path: work, Trunk: "main"})
+	o.Now = func() time.Time { return time.Date(2026, 9, 11, 7, 30, 0, 0, time.Local) } // 금요일
+
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer dead.Close()
+	if err := os.MkdirAll(filepath.Dir(o.Holiday.Config), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.Holiday.Config, []byte("url = \""+dead.URL+"\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// setupCommand 가 심어 둔 자리채우기 달력(2000~2100)은 2026 년도 덮어서, 이 테스트가 바라는
+	// "회복 실패" 경로를 타지 않는다. 이 테스트만의 낡은 달력으로 덮어써 오늘을 덮지 못하게 한다.
+	if err := holiday.WriteFile(o.Holiday.Calendar(), holiday.File{
+		SyncedAt: "2020-01-01T00:00:00Z",
+		Source:   "https://example.invalid/calendar.ics",
+		Covers:   holiday.Range{From: "2000-01-01", To: "2000-12-31"}, // 2026 을 덮지 못하는 낡은 목록
+		Holidays: []holiday.Entry{{Date: "2000-01-01", Name: "placeholder"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RunCommand(t.Context(), o); err != nil {
+		t.Fatalf("a failed recovery must not block the run: %v", err)
+	}
+	if !strings.Contains(slack.last(), "gofer holiday sync") {
+		t.Errorf("the result message should carry the warning, got:\n%s", slack.last())
+	}
+	last, err := ReadRunResult(o.Paths.LastRun())
+	if err != nil || !strings.Contains(last.Warning, "gofer holiday sync") {
+		t.Errorf("last-run.json should keep the warning: %v %+v", err, last.Warning)
 	}
 }

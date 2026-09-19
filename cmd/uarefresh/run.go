@@ -5,12 +5,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	hol "gofer/internal/holiday"
 	"gofer/internal/tui"
 	ua "gofer/internal/uarefresh"
 )
 
 func runCmd() *cobra.Command {
 	var dryRun bool
+	var force bool
 	var only string
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -23,13 +25,18 @@ the graph hash differs from HEAD. Sends one Slack DM at the end. Exit code 1 if 
 			if err != nil {
 				return err
 			}
+			hpaths, err := hol.DefaultPaths()
+			if err != nil {
+				return err
+			}
 			return ua.RunCommand(cmd.Context(), ua.CommandOptions{
-				Paths: paths, DryRun: dryRun, Only: only,
+				Paths: paths, Holiday: hpaths, DryRun: dryRun, Force: force, Only: only,
 				Stdout: os.Stdout, TTY: tui.IsTerminal(os.Stdout),
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "validate config and print what would happen; touches neither git nor claude")
+	cmd.Flags().BoolVar(&force, "force", false, "run even on a weekend or public holiday")
 	cmd.Flags().StringVar(&only, "only", "", "process only the repo with this directory name")
 	return cmd
 }

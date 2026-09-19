@@ -36,6 +36,7 @@ type RunResult struct {
 	FinishedAt time.Time    `json:"finished_at"`
 	Repos      []RepoResult `json:"repos"`
 	LogPath    string       `json:"log_path"`
+	Warning    string       `json:"warning,omitempty"` // 공휴일 목록을 회복하지 못했을 때만 채워진다
 }
 
 // Labels 는 화면·DM 요약에 쓰는 결과별 문구다.

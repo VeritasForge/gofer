@@ -36,11 +36,12 @@ func New(entries []Entry, from, to string, extra, ignore []string) *Calendar {
 
 // Holiday 는 그날이 쉬는 날이면 이유를 돌려준다: "주말", "삼일절", "쉬는 날 삼일절" 등.
 func (c *Calendar) Holiday(t time.Time) (string, bool) {
-	if wd := t.Weekday(); wd == time.Saturday || wd == time.Sunday {
-		return "주말", true
-	}
+	// 공휴일 목록을 먼저 확인 — 주말과 겹치는 공휴일도 공휴일 이름으로 돌려준다.
 	if name, ok := c.holidays[t.Format(dateLayout)]; ok {
 		return name, true
+	}
+	if wd := t.Weekday(); wd == time.Saturday || wd == time.Sunday {
+		return "주말", true
 	}
 	return "", false
 }

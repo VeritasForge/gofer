@@ -264,6 +264,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Task 1 완료조건:** `go test ./internal/holiday/ -v`가 PASS이고, `go vet ./internal/holiday/`가 조용하다.
 
+> **구현 중 갱신 (Task 3):** `Holiday()`의 판정 순서를 "주말 우선"에서 "공휴일 목록 우선"으로 바꿨다. 어떤 공휴일이 주말과 겹치면 "주말" 대신 그 공휴일 이름을 사유로 돌려준다. Task 3의 표본 데이터(2026-03-01, 일요일에 걸친 삼일절)가 그 순서를 요구했고, 이 문서 어디에도 우선순위를 정해 두지 않아 스펙 위반은 아니다. Task 1의 기존 테스트 케이스는 공휴일과 주말이 겹치는 경우가 없어 영향받지 않는다.
+
 ---
 
 ### Task 2: 파일 위치, 설정 읽기, 달력 열기
